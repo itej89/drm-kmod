@@ -31,8 +31,7 @@ SRCS=	pvr_ccb.c \
 	pvr_stream_defs.c \
 	pvr_sync.c \
 	pvr_vm.c \
-	pvr_vm_mips.c \
-	pvr_freebsd_mod.c
+	pvr_vm_mips.c
 
 .if defined(CONFIG_DEBUG_FS)
 SRCS+=	pvr_debugfs.c

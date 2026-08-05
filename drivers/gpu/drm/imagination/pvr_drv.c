@@ -1499,3 +1499,11 @@ MODULE_DESCRIPTION(PVR_DRIVER_DESC);
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_IMPORT_NS(DMA_BUF);
 MODULE_FIRMWARE("powervr/rogue_33.15.11.3_v1.fw");
+
+#ifdef __FreeBSD__
+#include <sys/module.h>
+MODULE_DEPEND(pvr, drmn, 2, 2, 2);
+MODULE_DEPEND(pvr, linuxkpi, 1, 1, 1);
+MODULE_DEPEND(pvr, dmabuf, 1, 1, 1);
+MODULE_DEPEND(pvr, ttm, 1, 1, 1);
+#endif
