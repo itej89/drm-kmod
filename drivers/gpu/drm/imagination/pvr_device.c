@@ -514,6 +514,17 @@ pvr_device_init(struct pvr_device *pvr_dev)
 	if (err)
 		return err;
 
+#ifdef __FreeBSD__
+	/* pm_runtime is no-ops on FreeBSD — manually enable clocks */
+	err = clk_prepare_enable(pvr_dev->core_clk);
+	if (err)
+		return err;
+	if (pvr_dev->sys_clk)
+		clk_prepare_enable(pvr_dev->sys_clk);
+	if (pvr_dev->mem_clk)
+		clk_prepare_enable(pvr_dev->mem_clk);
+#endif
+
 	/* Map the control registers into memory. */
 	err = pvr_device_reg_init(pvr_dev);
 	if (err)
