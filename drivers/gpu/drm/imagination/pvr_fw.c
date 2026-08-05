@@ -985,16 +985,21 @@ pvr_fw_init(struct pvr_device *pvr_dev)
 	if (err)
 		goto err_kccb_rtn_release;
 
+	printf("pvr_fw_init: starting firmware\n");
 	err = pvr_fw_start(pvr_dev);
-	if (err)
+	if (err) {
+		printf("pvr_fw_init: fw_start failed %d\n", err);
 		goto err_destroy_structures;
+	}
 
+	printf("pvr_fw_init: waiting for firmware boot\n");
 	err = pvr_wait_for_fw_boot(pvr_dev);
 	if (err) {
 		drm_err(from_pvr_device(pvr_dev), "Firmware failed to boot\n");
 		goto err_fw_stop;
 	}
 
+	printf("pvr_fw_init: FIRMWARE BOOTED SUCCESSFULLY!\n");
 	fw_dev->booted = true;
 
 	return 0;

@@ -206,6 +206,7 @@ pvr_device_irq_init(struct pvr_device *pvr_dev)
 	init_waitqueue_head(&pvr_dev->kccb.rtn_q);
 
 	pvr_dev->irq = platform_get_irq(plat_dev, 0);
+	printf("pvr_irq_init: platform_get_irq=%d\n", pvr_dev->irq);
 	if (pvr_dev->irq < 0)
 		return pvr_dev->irq;
 
@@ -213,9 +214,14 @@ pvr_device_irq_init(struct pvr_device *pvr_dev)
 	pvr_fw_irq_clear(pvr_dev);
 	pvr_fw_irq_enable(pvr_dev);
 
-	return request_threaded_irq(pvr_dev->irq, pvr_device_irq_handler,
-				    pvr_device_irq_thread_handler,
-				    IRQF_SHARED, "gpu", pvr_dev);
+	{
+		int err;
+		err = request_threaded_irq(pvr_dev->irq, pvr_device_irq_handler,
+					    pvr_device_irq_thread_handler,
+					    IRQF_SHARED, "gpu", pvr_dev);
+		printf("pvr_irq_init: request_threaded_irq=%d\n", err);
+		return err;
+	}
 }
 
 /**
@@ -567,18 +573,29 @@ pvr_device_init(struct pvr_device *pvr_dev)
 #endif
 
 	/* Map the control registers into memory. */
+	printf("pvr_device_init: reg_init\n");
 	err = pvr_device_reg_init(pvr_dev);
-	if (err)
+	if (err) {
+		printf("pvr_device_init: reg_init failed %d\n", err);
 		goto err_pm_runtime_put;
+	}
 
 	/* Perform GPU-specific initialization steps. */
+	printf("pvr_device_init: gpu_init\n");
 	err = pvr_device_gpu_init(pvr_dev);
-	if (err)
+	if (err) {
+		printf("pvr_device_init: gpu_init failed %d\n", err);
 		goto err_pm_runtime_put;
+	}
+	printf("pvr_device_init: gpu_init OK, firmware booted!\n");
 
+	printf("pvr_device_init: irq_init\n");
 	err = pvr_device_irq_init(pvr_dev);
-	if (err)
+	if (err) {
+		printf("pvr_device_init: irq_init failed %d\n", err);
 		goto err_device_gpu_fini;
+	}
+	printf("pvr_device_init: irq_init OK\n");
 
 	pm_runtime_put(dev);
 
