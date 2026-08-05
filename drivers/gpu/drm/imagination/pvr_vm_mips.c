@@ -158,19 +158,37 @@ pvr_vm_mips_map(struct pvr_device *pvr_dev, struct pvr_fw_object *fw_obj)
 	s32 pfn;
 	int err;
 
-	if (check_add_overflow(start, size - 1, &end))
+	if (check_add_overflow(start, size - 1, &end)) {
+		printf("mips_map: overflow start=0x%llx size=0x%llx\n",
+		    (unsigned long long)start, (unsigned long long)size);
 		return -EINVAL;
+	}
+
+	printf("mips_map: start=0x%llx end=0x%llx heap_base=0x%llx raw_size=0x%x\n",
+	    (unsigned long long)start, (unsigned long long)end,
+	    (unsigned long long)ROGUE_FW_HEAP_BASE,
+	    fw_dev->fw_heap_info.raw_size);
 
 	if (start < ROGUE_FW_HEAP_BASE ||
 	    start >= ROGUE_FW_HEAP_BASE + fw_dev->fw_heap_info.raw_size ||
 	    end < ROGUE_FW_HEAP_BASE ||
 	    end >= ROGUE_FW_HEAP_BASE + fw_dev->fw_heap_info.raw_size ||
 	    (start & ROGUE_MIPSFW_PAGE_MASK_4K) ||
-	    ((end + 1) & ROGUE_MIPSFW_PAGE_MASK_4K))
+	    ((end + 1) & ROGUE_MIPSFW_PAGE_MASK_4K)) {
+		printf("mips_map: range check failed! s<%d s>=%d e<%d e>=%d salign=%d ealign=%d\n",
+		    start < ROGUE_FW_HEAP_BASE,
+		    start >= ROGUE_FW_HEAP_BASE + fw_dev->fw_heap_info.raw_size,
+		    end < ROGUE_FW_HEAP_BASE,
+		    end >= ROGUE_FW_HEAP_BASE + fw_dev->fw_heap_info.raw_size,
+		    !!(start & ROGUE_MIPSFW_PAGE_MASK_4K),
+		    !!((end + 1) & ROGUE_MIPSFW_PAGE_MASK_4K));
 		return -EINVAL;
+	}
 
 	start_pfn = (start & fw_dev->fw_heap_info.offset_mask) >> ROGUE_MIPSFW_LOG2_PAGE_SIZE_4K;
 	end_pfn = (end & fw_dev->fw_heap_info.offset_mask) >> ROGUE_MIPSFW_LOG2_PAGE_SIZE_4K;
+
+	printf("mips_map: start_pfn=%d end_pfn=%d\n", start_pfn, end_pfn);
 
 	if (pvr_obj->flags & PVR_BO_FW_FLAGS_DEVICE_UNCACHED)
 		cache_policy = ROGUE_MIPSFW_UNCACHED_CACHE_POLICY;
@@ -187,8 +205,11 @@ pvr_vm_mips_map(struct pvr_device *pvr_dev, struct pvr_fw_object *fw_obj)
 						 (pfn - start_pfn) <<
 						 ROGUE_MIPSFW_LOG2_PAGE_SIZE_4K,
 						 &dma_addr);
-		if (err)
+		if (err) {
+			printf("mips_map: get_dma_addr failed pfn=%d offset=0x%x err=%d\n",
+			    pfn, (pfn - start_pfn) << ROGUE_MIPSFW_LOG2_PAGE_SIZE_4K, err);
 			goto err_unmap_pages;
+		}
 
 		pte = ((dma_addr >> ROGUE_MIPSFW_LOG2_PAGE_SIZE_4K)
 		       << ROGUE_MIPSFW_ENTRYLO_PFN_SHIFT) & mips_data->pfn_mask;
