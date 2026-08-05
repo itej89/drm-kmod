@@ -24,7 +24,6 @@ SRCS=	pvr_ccb.c \
 	pvr_hwrt.c \
 	pvr_job.c \
 	pvr_mmu.c \
-	#pvr_params.c \
 	pvr_power.c \
 	pvr_queue.c \
 	pvr_stream.c \
@@ -67,6 +66,7 @@ CFLAGS+= '-DLINUXKPI_PARAM_PREFIX=pvr_'
 CFLAGS+= -DCONFIG_DRM_POWERVR
 CFLAGS+= -DCONFIG_DEBUG_FS
 CWARNFLAGS+= -Wno-integer-overflow
+CWARNFLAGS.pvr_vm.c+= -Wno-constant-conversion
 
 .include "../linuxkpi_version.mk"
 .include "../compiler_flags.mk"
