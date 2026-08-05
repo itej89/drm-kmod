@@ -58,8 +58,9 @@ int drm_sysfs_init(void)
 {
 
 	drm_class = class_create("drm");
-	if (drm_class == NULL)
-		return PTR_ERR(drm_class);
+	printf("drm_sysfs_init: drm_class=%p\n", drm_class);
+	if (IS_ERR_OR_NULL(drm_class))
+		return (drm_class == NULL) ? -ENOMEM : PTR_ERR(drm_class);
 
 	drm_class->devnode = drm_devnode;
 	return 0;
