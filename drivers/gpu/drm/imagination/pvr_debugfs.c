@@ -25,15 +25,29 @@ static const struct pvr_debugfs_entry pvr_debugfs_entries[] = {
 void
 pvr_debugfs_init(struct drm_minor *minor)
 {
-	struct drm_device *drm_dev = minor->dev;
-	struct pvr_device *pvr_dev = to_pvr_device(drm_dev);
-	struct dentry *root = minor->debugfs_root;
+	struct drm_device *drm_dev;
+	struct pvr_device *pvr_dev;
+	struct dentry *root;
 	size_t i;
+
+	printf("pvr_debugfs_init: minor=%p\n", minor);
+	if (minor == NULL)
+		return;
+
+	drm_dev = minor->dev;
+	printf("pvr_debugfs_init: drm_dev=%p\n", drm_dev);
+	if (drm_dev == NULL)
+		return;
+
+	pvr_dev = to_pvr_device(drm_dev);
+	root = minor->debugfs_root;
+	printf("pvr_debugfs_init: root=%p pvr_dev=%p\n", root, pvr_dev);
 
 	for (i = 0; i < ARRAY_SIZE(pvr_debugfs_entries); ++i) {
 		const struct pvr_debugfs_entry *entry = &pvr_debugfs_entries[i];
 		struct dentry *dir;
 
+		printf("pvr_debugfs_init: creating dir '%s'\n", entry->name);
 		dir = debugfs_create_dir(entry->name, root);
 		if (IS_ERR(dir)) {
 			drm_warn(drm_dev,
@@ -42,8 +56,11 @@ pvr_debugfs_init(struct drm_minor *minor)
 			continue;
 		}
 
+		printf("pvr_debugfs_init: calling init for '%s'\n", entry->name);
 		entry->init(pvr_dev, dir);
+		printf("pvr_debugfs_init: init done for '%s'\n", entry->name);
 	}
+	printf("pvr_debugfs_init: complete\n");
 }
 
 /*

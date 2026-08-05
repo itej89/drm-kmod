@@ -352,9 +352,12 @@ int drm_debugfs_register(struct drm_minor *minor, int minor_id,
 	/* TODO: Only for compatibility with drivers */
 	minor->debugfs_root = dev->debugfs_root;
 
+	printf("drm_debugfs_register: minor=%p type=%d render=%p debugfs_init=%p\n",
+	    minor, minor->type, dev->render, dev->driver->debugfs_init);
 	if (dev->driver->debugfs_init && dev->render != minor)
 		dev->driver->debugfs_init(minor);
 
+	printf("drm_debugfs_register: done\n");
 	return 0;
 }
 
