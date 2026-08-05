@@ -1474,6 +1474,7 @@ static void pvr_remove(struct platform_device *plat_dev)
 }
 
 static const struct of_device_id dt_match[] = {
+	{ .compatible = "img,img-rogue", .data = NULL },
 	{ .compatible = "img,img-axe", .data = NULL },
 	{}
 };
