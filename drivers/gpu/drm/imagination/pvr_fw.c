@@ -865,6 +865,12 @@ pvr_wait_for_fw_boot(struct pvr_device *pvr_dev)
 			return 0;
 	}
 
+	printf("fw_boot: TIMEOUT firmware_started=%d\n",
+	    READ_ONCE(fw_dev->fwif_sysinit->firmware_started));
+	printf("fw_boot: MIPS_EXCEPTION_STATUS=0x%x IRQ_STATUS=0x%x\n",
+	    pvr_cr_read32(pvr_dev, 0x08D0),
+	    pvr_cr_read32(pvr_dev, 0x08A8));
+
 	return -ETIMEDOUT;
 }
 
