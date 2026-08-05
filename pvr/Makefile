@@ -24,6 +24,7 @@ SRCS=	pvr_ccb.c \
 	pvr_hwrt.c \
 	pvr_job.c \
 	pvr_mmu.c \
+	pvr_params.c \
 	pvr_power.c \
 	pvr_queue.c \
 	pvr_stream.c \

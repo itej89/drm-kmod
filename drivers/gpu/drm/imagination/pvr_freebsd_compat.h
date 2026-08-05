@@ -298,8 +298,11 @@ struct elf32_phdr {
 	((struct iosys_map){ .vaddr = (addr_), .is_iomem = false })
 #endif
 
-/* pvr_params.c sysctl workaround — suppress the module_param expansion */
-#define	DRM_SYSCTL_PARAM_PREFIX	_pvr
+/* pvr_params.c — override module_param to no-ops */
+#undef module_param_named
+#define	module_param_named(name, value, type, perm)
+#undef MODULE_PARM_DESC
+#define	MODULE_PARM_DESC(name, desc)
 
 /* MODULE_DEVICE_TABLE(of, ...) — no-op on FreeBSD */
 #ifndef MODULE_DEVICE_TABLE_BUS_of
