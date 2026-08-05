@@ -345,19 +345,9 @@ pvr_gem_object_create(struct pvr_device *pvr_dev, size_t size, u64 flags)
 	if (size == 0 || !pvr_gem_object_flags_validate(flags))
 		return ERR_PTR(-EINVAL);
 
-	printf("pvr_gem_object_create: size=%zu flags=0x%llx\n",
-	    size, (unsigned long long)flags);
-
 	shmem_obj = drm_gem_shmem_create(from_pvr_device(pvr_dev), size);
-	if (IS_ERR(shmem_obj)) {
-		printf("drm_gem_shmem_create failed: %ld\n", PTR_ERR(shmem_obj));
+	if (IS_ERR(shmem_obj))
 		return ERR_CAST(shmem_obj);
-	}
-
-	printf("shmem_create ok, filp=%p f_shmem=%p obj_size=%zu\n",
-	    shmem_obj->base.filp,
-	    shmem_obj->base.filp ? shmem_obj->base.filp->f_shmem : NULL,
-	    shmem_obj->base.size);
 
 	shmem_obj->pages_mark_dirty_on_put = true;
 	shmem_obj->map_wc = !(flags & PVR_BO_CPU_CACHED);
@@ -367,7 +357,6 @@ pvr_gem_object_create(struct pvr_device *pvr_dev, size_t size, u64 flags)
 	sgt = drm_gem_shmem_get_pages_sgt(shmem_obj);
 	if (IS_ERR(sgt)) {
 		err = PTR_ERR(sgt);
-		printf("drm_gem_shmem_get_pages_sgt failed: %d\n", err);
 		goto err_shmem_object_free;
 	}
 
@@ -409,19 +398,8 @@ pvr_gem_get_dma_addr(struct pvr_gem_object *pvr_obj, u32 offset,
 	unsigned int sgt_idx;
 
 	WARN_ON(!shmem_obj->sgt);
-	if (!shmem_obj->sgt) {
-		printf("pvr_gem_get_dma_addr: sgt is NULL!\n");
-		return -EINVAL;
-	}
 	for_each_sgtable_dma_sg(shmem_obj->sgt, sgl, sgt_idx) {
 		u32 new_offset = accumulated_offset + sg_dma_len(sgl);
-
-		if (sgt_idx < 3 || offset == 0)
-			printf("pvr_gem_get_dma: [%u] dma_addr=0x%llx dma_len=0x%x acc=0x%x\n",
-			    sgt_idx,
-			    (unsigned long long)sg_dma_address(sgl),
-			    sg_dma_len(sgl),
-			    accumulated_offset);
 
 		if (offset >= accumulated_offset && offset < new_offset) {
 			*dma_addr_out = sg_dma_address(sgl) +
@@ -432,7 +410,5 @@ pvr_gem_get_dma_addr(struct pvr_gem_object *pvr_obj, u32 offset,
 		accumulated_offset = new_offset;
 	}
 
-	printf("pvr_gem_get_dma_addr: no match for offset=0x%x total=0x%x nents=%u\n",
-	    offset, accumulated_offset, shmem_obj->sgt->nents);
 	return -EINVAL;
 }
