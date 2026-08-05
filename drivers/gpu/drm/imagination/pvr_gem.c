@@ -247,14 +247,10 @@ pvr_gem_object_vunmap(struct pvr_gem_object *pvr_obj)
 
 	dma_resv_lock(obj->resv, NULL);
 
-	if (pvr_obj->flags & PVR_BO_CPU_CACHED) {
+	if (shmem_obj->sgt) {
 		struct device *dev = shmem_obj->base.dev->dev;
 
-		/* If shmem_obj->sgt is NULL, that means the buffer hasn't been mapped
-		 * in GPU space yet.
-		 */
-		if (shmem_obj->sgt)
-			dma_sync_sgtable_for_device(dev, shmem_obj->sgt, DMA_BIDIRECTIONAL);
+		dma_sync_sgtable_for_device(dev, shmem_obj->sgt, DMA_BIDIRECTIONAL);
 	}
 
 	drm_gem_shmem_vunmap(shmem_obj, &map);
