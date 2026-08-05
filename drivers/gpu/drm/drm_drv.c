@@ -188,9 +188,13 @@ static int drm_minor_register(struct drm_device *dev, enum drm_minor_type type)
 		}
 	}
 
+	printf("drm_minor_register: type=%d kdev=%p, calling device_add\n",
+	    type, minor->kdev);
 	ret = device_add(minor->kdev);
-	if (ret)
+	if (ret) {
+		printf("drm_minor_register: device_add failed %d\n", ret);
 		goto err_debugfs;
+	}
 
 	/* replace NULL with @minor so lookups will succeed from now on */
 	entry = xa_store(drm_minor_get_xa(type), minor->index, minor, GFP_KERNEL);
