@@ -409,8 +409,19 @@ pvr_gem_get_dma_addr(struct pvr_gem_object *pvr_obj, u32 offset,
 	unsigned int sgt_idx;
 
 	WARN_ON(!shmem_obj->sgt);
+	if (!shmem_obj->sgt) {
+		printf("pvr_gem_get_dma_addr: sgt is NULL!\n");
+		return -EINVAL;
+	}
 	for_each_sgtable_dma_sg(shmem_obj->sgt, sgl, sgt_idx) {
 		u32 new_offset = accumulated_offset + sg_dma_len(sgl);
+
+		if (sgt_idx < 3 || offset == 0)
+			printf("pvr_gem_get_dma: [%u] dma_addr=0x%llx dma_len=0x%x acc=0x%x\n",
+			    sgt_idx,
+			    (unsigned long long)sg_dma_address(sgl),
+			    sg_dma_len(sgl),
+			    accumulated_offset);
 
 		if (offset >= accumulated_offset && offset < new_offset) {
 			*dma_addr_out = sg_dma_address(sgl) +
@@ -421,5 +432,7 @@ pvr_gem_get_dma_addr(struct pvr_gem_object *pvr_obj, u32 offset,
 		accumulated_offset = new_offset;
 	}
 
+	printf("pvr_gem_get_dma_addr: no match for offset=0x%x total=0x%x nents=%u\n",
+	    offset, accumulated_offset, shmem_obj->sgt->nents);
 	return -EINVAL;
 }
