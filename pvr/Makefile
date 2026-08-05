@@ -32,9 +32,7 @@ SRCS=	pvr_ccb.c \
 	pvr_vm.c \
 	pvr_vm_mips.c
 
-.if defined(CONFIG_DEBUG_FS)
 SRCS+=	pvr_debugfs.c
-.endif
 
 SRCS+=	\
 	opt_acpi.h \
