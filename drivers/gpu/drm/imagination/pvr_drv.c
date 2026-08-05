@@ -1506,4 +1506,5 @@ MODULE_DEPEND(pvr, drmn, 2, 2, 2);
 MODULE_DEPEND(pvr, linuxkpi, 1, 1, 1);
 MODULE_DEPEND(pvr, dmabuf, 1, 1, 1);
 MODULE_DEPEND(pvr, ttm, 1, 1, 1);
+MODULE_DEPEND(pvr, lindebugfs, 1, 1, 1);
 #endif
