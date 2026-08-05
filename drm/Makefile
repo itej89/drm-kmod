@@ -41,6 +41,7 @@ SRCS=	drm_atomic.c \
 	drm_gem.c \
 	drm_gem_atomic_helper.c \
 	drm_gem_framebuffer_helper.c \
+	drm_gem_shmem_helper.c \
 	drm_gpuvm.c \
 	drm_hdmi_state_helper.c \
 	drm_ioctl.c \
@@ -186,6 +187,7 @@ CWARNFLAGS.drm_file.c+=				-Wno-unused-but-set-variable
 CWARNFLAGS.drm_file.c+=				-Wno-unused-value
 CWARNFLAGS.drm_gem_atomic_helper.c+=		-Wno-missing-prototypes
 CWARNFLAGS.drm_gem_framebuffer_helper.c+=	-Wno-missing-prototypes
+CWARNFLAGS.drm_gem_shmem_helper.c+=		-Wno-missing-prototypes
 CWARNFLAGS.drm_hdcp_helper.c+=			-Wno-cast-qual
 CWARNFLAGS.drm_ioc32.c+=			-Wno-address-of-packed-member
 CWARNFLAGS.drm_mm.c+=				-Wno-cast-qual -Wno-unused-function
