@@ -18,6 +18,6 @@ CWARNFLAGS+=	-Wno-pointer-sign
 
 # Globally silence a new warning from Clang 21.
 # See https://lkml.org/lkml/2025/5/6/1681.
-.if ${COMPILER_TYPE} == clang && ${COMPILER_VERSION} >= 210100
+.if defined(COMPILER_TYPE) && ${COMPILER_TYPE} == clang && ${COMPILER_VERSION} >= 210100
 CWARNFLAGS+=	-Wno-default-const-init-var-unsafe
 .endif

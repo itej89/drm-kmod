@@ -3,7 +3,7 @@
 SYSDIR?=/usr/src/sys
 .include "${SYSDIR}/conf/kern.opts.mk"
 
-_VALID_KMODS=	dmabuf ttm drm dummygfx i915 amd radeon linuxkpi_video
+_VALID_KMODS=	dmabuf ttm drm dummygfx i915 amd radeon linuxkpi_video pvr
 
 SUPPORTED_ARCH=	amd64 \
 		i386 \
@@ -33,6 +33,10 @@ _dummygfx = dummygfx
 
 .if defined(DEVELOPER)
 DEFAULT_KMODS+=	linuxkpi_video
+.endif
+
+.if ${MACHINE_CPUARCH} == "riscv"
+DEFAULT_KMODS+=	pvr
 .endif
 
 # Calling kldxref(8) for each module is expensive.
