@@ -840,8 +840,10 @@ pvr_fw_cleanup(struct pvr_device *pvr_dev)
 		pvr_fw_object_destroy(fw_mem->core_code_obj);
 	if (fw_mem->core_data_obj)
 		pvr_fw_object_destroy(fw_mem->core_data_obj);
-	pvr_fw_object_destroy(fw_mem->code_obj);
-	pvr_fw_object_destroy(fw_mem->data_obj);
+	if (fw_mem->code_obj)
+		pvr_fw_object_destroy(fw_mem->code_obj);
+	if (fw_mem->data_obj)
+		pvr_fw_object_destroy(fw_mem->data_obj);
 }
 
 /**

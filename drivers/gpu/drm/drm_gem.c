@@ -660,13 +660,59 @@ EXPORT_SYMBOL(drm_gem_put_pages);
 #elif defined(__FreeBSD__)
 struct page **drm_gem_get_pages(struct drm_gem_object *obj)
 {
-	return (ERR_PTR(-ENOSYS));
+	vm_object_t vm_obj;
+	struct page **pages;
+	long i, npages;
+
+	if (WARN_ON(!obj->filp))
+		return (ERR_PTR(-EINVAL));
+
+	vm_obj = obj->filp->f_shmem;
+	if (vm_obj == NULL)
+		return (ERR_PTR(-EINVAL));
+
+	WARN_ON((obj->size & (PAGE_SIZE - 1)) != 0);
+
+	npages = obj->size >> PAGE_SHIFT;
+
+	pages = kvmalloc_array(npages, sizeof(struct page *), GFP_KERNEL);
+	if (pages == NULL)
+		return (ERR_PTR(-ENOMEM));
+
+	for (i = 0; i < npages; i++) {
+		pages[i] = shmem_read_mapping_page(vm_obj, i);
+		if (IS_ERR(pages[i])) {
+			int err = PTR_ERR(pages[i]);
+
+			while (--i >= 0)
+				vm_page_unwire(pages[i], PQ_ACTIVE);
+			kvfree(pages);
+			return (ERR_PTR(err));
+		}
+	}
+
+	return (pages);
 }
 EXPORT_SYMBOL(drm_gem_get_pages);
 
 void drm_gem_put_pages(struct drm_gem_object *obj, struct page **pages,
 		bool dirty, bool accessed)
 {
+	long i, npages;
+
+	WARN_ON((obj->size & (PAGE_SIZE - 1)) != 0);
+
+	npages = obj->size >> PAGE_SHIFT;
+
+	for (i = 0; i < npages; i++) {
+		if (!pages[i])
+			continue;
+		if (dirty)
+			set_page_dirty(pages[i]);
+		vm_page_unwire(pages[i], PQ_ACTIVE);
+	}
+
+	kvfree(pages);
 }
 EXPORT_SYMBOL(drm_gem_put_pages);
 #endif
