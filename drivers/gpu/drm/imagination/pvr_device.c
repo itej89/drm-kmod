@@ -216,10 +216,11 @@ pvr_device_irq_init(struct pvr_device *pvr_dev)
 
 	{
 		int err;
-		err = request_threaded_irq(pvr_dev->irq, pvr_device_irq_handler,
+		err = devm_request_threaded_irq(drm_dev->dev, pvr_dev->irq,
+					    pvr_device_irq_handler,
 					    pvr_device_irq_thread_handler,
 					    IRQF_SHARED, "gpu", pvr_dev);
-		printf("pvr_irq_init: request_threaded_irq=%d\n", err);
+		printf("pvr_irq_init: devm_request_threaded_irq=%d\n", err);
 		return err;
 	}
 }
