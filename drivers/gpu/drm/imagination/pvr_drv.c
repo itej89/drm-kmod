@@ -1403,10 +1403,15 @@ pvr_probe(struct platform_device *plat_dev)
 	struct drm_device *drm_dev;
 	int err;
 
+	dev_info(&plat_dev->dev, "pvr_probe: start\n");
+
 	pvr_dev = devm_drm_dev_alloc(&plat_dev->dev, &pvr_drm_driver,
 				     struct pvr_device, base);
-	if (IS_ERR(pvr_dev))
+	if (IS_ERR(pvr_dev)) {
+		dev_err(&plat_dev->dev, "pvr_probe: devm_drm_dev_alloc failed %ld\n",
+		    PTR_ERR(pvr_dev));
 		return PTR_ERR(pvr_dev);
+	}
 
 	drm_dev = &pvr_dev->base;
 
@@ -1427,13 +1432,20 @@ pvr_probe(struct platform_device *plat_dev)
 	pm_runtime_use_autosuspend(&plat_dev->dev);
 	pvr_watchdog_init(pvr_dev);
 
+	dev_info(&plat_dev->dev, "pvr_probe: calling pvr_device_init\n");
 	err = pvr_device_init(pvr_dev);
-	if (err)
+	if (err) {
+		dev_err(&plat_dev->dev, "pvr_probe: pvr_device_init failed %d\n", err);
 		goto err_watchdog_fini;
+	}
 
+	dev_info(&plat_dev->dev, "pvr_probe: calling drm_dev_register\n");
 	err = drm_dev_register(drm_dev, 0);
-	if (err)
+	if (err) {
+		dev_err(&plat_dev->dev, "pvr_probe: drm_dev_register failed %d\n", err);
 		goto err_device_fini;
+	}
+	dev_info(&plat_dev->dev, "pvr_probe: SUCCESS\n");
 
 	xa_init_flags(&pvr_dev->free_list_ids, XA_FLAGS_ALLOC1);
 	xa_init_flags(&pvr_dev->job_ids, XA_FLAGS_ALLOC1);
