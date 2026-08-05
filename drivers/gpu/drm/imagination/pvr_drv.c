@@ -1493,19 +1493,39 @@ static struct platform_driver pvr_driver = {
 		.of_match_table = dt_match,
 	},
 };
+#ifdef __linux__
 module_platform_driver(pvr_driver);
+#elif defined(__FreeBSD__)
+static int
+pvr_modevent(module_t mod __unused, int event, void *arg __unused)
+{
+	switch (event) {
+	case MOD_LOAD:
+		return (linux_platform_register_driver(&pvr_driver));
+	case MOD_UNLOAD:
+		linux_platform_unregister_driver(&pvr_driver);
+		return (0);
+	default:
+		return (EOPNOTSUPP);
+	}
+}
 
-MODULE_AUTHOR("Imagination Technologies Ltd.");
-MODULE_DESCRIPTION(PVR_DRIVER_DESC);
-MODULE_LICENSE("Dual MIT/GPL");
-MODULE_IMPORT_NS(DMA_BUF);
-MODULE_FIRMWARE("powervr/rogue_33.15.11.3_v1.fw");
+static moduledata_t pvr_mod = {
+	"pvr",
+	pvr_modevent,
+	NULL
+};
 
-#ifdef __FreeBSD__
-#include <sys/module.h>
+DECLARE_MODULE(pvr, pvr_mod, SI_SUB_DRIVERS, SI_ORDER_ANY);
 MODULE_DEPEND(pvr, drmn, 2, 2, 2);
 MODULE_DEPEND(pvr, linuxkpi, 1, 1, 1);
 MODULE_DEPEND(pvr, dmabuf, 1, 1, 1);
 MODULE_DEPEND(pvr, ttm, 1, 1, 1);
 MODULE_DEPEND(pvr, lindebugfs, 1, 1, 1);
 #endif
+
+MODULE_AUTHOR("Imagination Technologies Ltd.");
+MODULE_DESCRIPTION(PVR_DRIVER_DESC);
+MODULE_LICENSE("Dual MIT/GPL");
+MODULE_IMPORT_NS(DMA_BUF);
+MODULE_FIRMWARE("powervr/rogue_33.15.11.3_v1.fw");
