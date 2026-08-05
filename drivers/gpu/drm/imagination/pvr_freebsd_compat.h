@@ -12,6 +12,8 @@
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
+#include <linux/clk.h>
+#include <linux/reset.h>
 
 struct drm_device;
 

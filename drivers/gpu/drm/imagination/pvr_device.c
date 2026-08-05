@@ -515,14 +515,47 @@ pvr_device_init(struct pvr_device *pvr_dev)
 		return err;
 
 #ifdef __FreeBSD__
-	/* pm_runtime is no-ops on FreeBSD — manually enable clocks */
-	err = clk_prepare_enable(pvr_dev->core_clk);
-	if (err)
-		return err;
-	if (pvr_dev->sys_clk)
-		clk_prepare_enable(pvr_dev->sys_clk);
-	if (pvr_dev->mem_clk)
-		clk_prepare_enable(pvr_dev->mem_clk);
+	/*
+	 * pm_runtime is no-ops on FreeBSD. Manually enable all GPU clocks
+	 * and deassert resets following the StarFive JH7110 power sequence.
+	 */
+	{
+		struct clk *clk_apb, *clk_rtc, *clk_axi, *clk_div;
+		struct reset_control *rst_apb, *rst_doma;
+
+		clk_apb = devm_clk_get_optional(dev, "apb");
+		clk_rtc = devm_clk_get_optional(dev, "rtc");
+		clk_axi = devm_clk_get_optional(dev, "axi");
+		clk_div = devm_clk_get_optional(dev, "div");
+
+		if (!IS_ERR_OR_NULL(clk_apb))
+			clk_prepare_enable(clk_apb);
+		if (!IS_ERR_OR_NULL(clk_rtc))
+			clk_prepare_enable(clk_rtc);
+		if (!IS_ERR_OR_NULL(clk_div))
+			clk_set_rate(clk_div, 594000000);
+		err = clk_prepare_enable(pvr_dev->core_clk);
+		if (err) {
+			dev_err(dev, "failed to enable core clock: %d\n", err);
+			return err;
+		}
+		if (pvr_dev->sys_clk)
+			clk_prepare_enable(pvr_dev->sys_clk);
+		if (!IS_ERR_OR_NULL(clk_axi))
+			clk_prepare_enable(clk_axi);
+
+		udelay(1);
+
+		rst_apb = devm_reset_control_get_optional_exclusive(dev, "apb");
+		rst_doma = devm_reset_control_get_optional_exclusive(dev, "doma");
+		if (!IS_ERR_OR_NULL(rst_apb))
+			reset_control_deassert(rst_apb);
+		if (!IS_ERR_OR_NULL(rst_doma))
+			reset_control_deassert(rst_doma);
+
+		udelay(10);
+		dev_info(dev, "GPU clocks enabled, resets deasserted\n");
+	}
 #endif
 
 	/* Map the control registers into memory. */
