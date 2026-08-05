@@ -1167,6 +1167,7 @@ pvr_fw_object_fw_map(struct pvr_device *pvr_dev, struct pvr_fw_object *fw_obj, u
 	spin_lock(&fw_dev->fw_mm_lock);
 
 	if (drm_mm_node_allocated(&fw_obj->fw_mm_node)) {
+		printf("fw_map: already allocated!\n");
 		err = -EINVAL;
 		goto err_unlock;
 	}
@@ -1181,22 +1182,35 @@ pvr_fw_object_fw_map(struct pvr_device *pvr_dev, struct pvr_fw_object *fw_obj, u
 						  fw_dev->fw_heap_info.gpu_addr,
 						  fw_dev->fw_heap_info.gpu_addr +
 						  fw_dev->fw_heap_info.size, 0);
-		if (err)
+		if (err) {
+			printf("fw_map: insert_node_in_range failed %d\n", err);
 			goto err_unlock;
+		}
 	} else {
 		fw_obj->fw_mm_node.start = dev_addr;
 		fw_obj->fw_mm_node.size = gem_obj->size;
+		printf("fw_map: reserve_node start=0x%llx size=0x%llx mm_start=0x%llx mm_size=0x%llx\n",
+		    (unsigned long long)dev_addr,
+		    (unsigned long long)gem_obj->size,
+		    (unsigned long long)fw_dev->fw_mm.head_node.start,
+		    (unsigned long long)fw_dev->fw_mm.head_node.size);
 		err = drm_mm_reserve_node(&fw_dev->fw_mm, &fw_obj->fw_mm_node);
-		if (err)
+		if (err) {
+			printf("fw_map: reserve_node failed %d\n", err);
 			goto err_unlock;
+		}
 	}
 
 	spin_unlock(&fw_dev->fw_mm_lock);
 
+	printf("fw_map: mm ok, calling vm_map (proc_type=%d)\n",
+	    pvr_dev->fw_dev.processor_type);
 	/* Map object on GPU. */
 	err = fw_dev->defs->vm_map(pvr_dev, fw_obj);
-	if (err)
+	if (err) {
+		printf("fw_map: vm_map failed %d\n", err);
 		goto err_remove_node;
+	}
 
 	fw_obj->fw_addr_offset = (u32)(fw_obj->fw_mm_node.start - fw_dev->fw_mm_base);
 
