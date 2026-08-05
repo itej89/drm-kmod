@@ -657,6 +657,18 @@ void drm_gem_put_pages(struct drm_gem_object *obj, struct page **pages,
 	kvfree(pages);
 }
 EXPORT_SYMBOL(drm_gem_put_pages);
+#elif defined(__FreeBSD__)
+struct page **drm_gem_get_pages(struct drm_gem_object *obj)
+{
+	return (ERR_PTR(-ENOSYS));
+}
+EXPORT_SYMBOL(drm_gem_get_pages);
+
+void drm_gem_put_pages(struct drm_gem_object *obj, struct page **pages,
+		bool dirty, bool accessed)
+{
+}
+EXPORT_SYMBOL(drm_gem_put_pages);
 #endif
 
 static int objects_lookup(struct drm_file *filp, u32 *handle, int count,
