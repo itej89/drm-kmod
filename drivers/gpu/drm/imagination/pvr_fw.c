@@ -1269,16 +1269,23 @@ pvr_fw_object_create_and_map_common(struct pvr_device *pvr_dev, size_t size,
 	if (IS_ERR(fw_obj->gem)) {
 		err = PTR_ERR(fw_obj->gem);
 		fw_obj->gem = NULL;
+		printf("fw_obj_create_map: pvr_gem_object_create failed %d\n", err);
 		goto err_put_object;
 	}
+	printf("fw_obj_create_map: gem ok, fw_map dev_addr=0x%llx\n",
+	    (unsigned long long)dev_addr);
 
 	err = pvr_fw_object_fw_map(pvr_dev, fw_obj, dev_addr);
-	if (err)
+	if (err) {
+		printf("fw_obj_create_map: fw_map failed %d\n", err);
 		goto err_put_object;
+	}
+	printf("fw_obj_create_map: fw_map ok, vmap next\n");
 
 	cpu_ptr = pvr_fw_object_vmap(fw_obj);
 	if (IS_ERR(cpu_ptr)) {
 		err = PTR_ERR(cpu_ptr);
+		printf("fw_obj_create_map: vmap failed %d\n", err);
 		goto err_put_object;
 	}
 
