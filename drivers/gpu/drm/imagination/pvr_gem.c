@@ -345,9 +345,19 @@ pvr_gem_object_create(struct pvr_device *pvr_dev, size_t size, u64 flags)
 	if (size == 0 || !pvr_gem_object_flags_validate(flags))
 		return ERR_PTR(-EINVAL);
 
+	printf("pvr_gem_object_create: size=%zu flags=0x%llx\n",
+	    size, (unsigned long long)flags);
+
 	shmem_obj = drm_gem_shmem_create(from_pvr_device(pvr_dev), size);
-	if (IS_ERR(shmem_obj))
+	if (IS_ERR(shmem_obj)) {
+		printf("drm_gem_shmem_create failed: %ld\n", PTR_ERR(shmem_obj));
 		return ERR_CAST(shmem_obj);
+	}
+
+	printf("shmem_create ok, filp=%p f_shmem=%p obj_size=%zu\n",
+	    shmem_obj->base.filp,
+	    shmem_obj->base.filp ? shmem_obj->base.filp->f_shmem : NULL,
+	    shmem_obj->base.size);
 
 	shmem_obj->pages_mark_dirty_on_put = true;
 	shmem_obj->map_wc = !(flags & PVR_BO_CPU_CACHED);
@@ -357,6 +367,7 @@ pvr_gem_object_create(struct pvr_device *pvr_dev, size_t size, u64 flags)
 	sgt = drm_gem_shmem_get_pages_sgt(shmem_obj);
 	if (IS_ERR(sgt)) {
 		err = PTR_ERR(sgt);
+		printf("drm_gem_shmem_get_pages_sgt failed: %d\n", err);
 		goto err_shmem_object_free;
 	}
 

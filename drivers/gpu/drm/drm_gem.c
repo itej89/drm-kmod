@@ -664,16 +664,22 @@ struct page **drm_gem_get_pages(struct drm_gem_object *obj)
 	struct page **pages;
 	long i, npages;
 
-	if (WARN_ON(!obj->filp))
+	if (WARN_ON(!obj->filp)) {
+		printf("drm_gem_get_pages: filp is NULL\n");
 		return (ERR_PTR(-EINVAL));
+	}
 
 	vm_obj = obj->filp->f_shmem;
-	if (vm_obj == NULL)
+	if (vm_obj == NULL) {
+		printf("drm_gem_get_pages: f_shmem is NULL\n");
 		return (ERR_PTR(-EINVAL));
+	}
 
 	WARN_ON((obj->size & (PAGE_SIZE - 1)) != 0);
 
 	npages = obj->size >> PAGE_SHIFT;
+	printf("drm_gem_get_pages: obj=%p size=%zu npages=%ld vm_obj=%p\n",
+	    obj, (size_t)obj->size, npages, vm_obj);
 
 	pages = kvmalloc_array(npages, sizeof(struct page *), GFP_KERNEL);
 	if (pages == NULL)
@@ -684,6 +690,7 @@ struct page **drm_gem_get_pages(struct drm_gem_object *obj)
 		if (IS_ERR(pages[i])) {
 			int err = PTR_ERR(pages[i]);
 
+			printf("drm_gem_get_pages: page %ld failed err=%d\n", i, err);
 			while (--i >= 0)
 				vm_page_unwire(pages[i], PQ_ACTIVE);
 			kvfree(pages);
@@ -691,6 +698,7 @@ struct page **drm_gem_get_pages(struct drm_gem_object *obj)
 		}
 	}
 
+	printf("drm_gem_get_pages: success, %ld pages allocated\n", npages);
 	return (pages);
 }
 EXPORT_SYMBOL(drm_gem_get_pages);
