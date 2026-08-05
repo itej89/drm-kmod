@@ -606,6 +606,9 @@ int drm_gem_shmem_mmap(struct drm_gem_shmem_object *shmem, struct vm_area_struct
 }
 EXPORT_SYMBOL_GPL(drm_gem_shmem_mmap);
 #elif defined(__FreeBSD__)
+const struct vm_operations_struct drm_gem_shmem_vm_ops = { 0 };
+EXPORT_SYMBOL_GPL(drm_gem_shmem_vm_ops);
+
 int drm_gem_shmem_mmap(struct drm_gem_shmem_object *shmem, struct vm_area_struct *vma)
 {
 	return (-ENOSYS);
