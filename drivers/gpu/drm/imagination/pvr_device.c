@@ -430,16 +430,24 @@ pvr_device_gpu_init(struct pvr_device *pvr_dev)
 
 	pvr_stream_create_musthave_masks(pvr_dev);
 
+	dev_info(from_pvr_device(pvr_dev)->dev, "pvr_device_gpu_init: set_dma_info\n");
 	err = pvr_set_dma_info(pvr_dev);
-	if (err)
+	if (err) {
+		dev_err(from_pvr_device(pvr_dev)->dev, "pvr_set_dma_info failed: %d\n", err);
 		return err;
-
-	if (pvr_dev->fw_dev.processor_type != PVR_FW_PROCESSOR_TYPE_MIPS) {
-		pvr_dev->kernel_vm_ctx = pvr_vm_create_context(pvr_dev, false);
-		if (IS_ERR(pvr_dev->kernel_vm_ctx))
-			return PTR_ERR(pvr_dev->kernel_vm_ctx);
 	}
 
+	if (pvr_dev->fw_dev.processor_type != PVR_FW_PROCESSOR_TYPE_MIPS) {
+		dev_info(from_pvr_device(pvr_dev)->dev, "pvr_device_gpu_init: creating VM context\n");
+		pvr_dev->kernel_vm_ctx = pvr_vm_create_context(pvr_dev, false);
+		if (IS_ERR(pvr_dev->kernel_vm_ctx)) {
+			dev_err(from_pvr_device(pvr_dev)->dev, "pvr_vm_create_context failed: %ld\n",
+			    PTR_ERR(pvr_dev->kernel_vm_ctx));
+			return PTR_ERR(pvr_dev->kernel_vm_ctx);
+		}
+	}
+
+	dev_info(from_pvr_device(pvr_dev)->dev, "pvr_device_gpu_init: calling pvr_fw_init\n");
 	err = pvr_fw_init(pvr_dev);
 	if (err)
 		goto err_vm_ctx_put;
