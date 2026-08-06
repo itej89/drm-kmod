@@ -865,12 +865,6 @@ pvr_wait_for_fw_boot(struct pvr_device *pvr_dev)
 			return 0;
 	}
 
-	printf("fw_boot: TIMEOUT firmware_started=%d\n",
-	    READ_ONCE(fw_dev->fwif_sysinit->firmware_started));
-	printf("fw_boot: MIPS_EXCEPTION_STATUS=0x%x IRQ_STATUS=0x%x\n",
-	    pvr_cr_read32(pvr_dev, 0x08D0),
-	    pvr_cr_read32(pvr_dev, 0x08A8));
-
 	return -ETIMEDOUT;
 }
 
@@ -985,21 +979,16 @@ pvr_fw_init(struct pvr_device *pvr_dev)
 	if (err)
 		goto err_kccb_rtn_release;
 
-	printf("pvr_fw_init: starting firmware\n");
 	err = pvr_fw_start(pvr_dev);
-	if (err) {
-		printf("pvr_fw_init: fw_start failed %d\n", err);
+	if (err)
 		goto err_destroy_structures;
-	}
 
-	printf("pvr_fw_init: waiting for firmware boot\n");
 	err = pvr_wait_for_fw_boot(pvr_dev);
 	if (err) {
 		drm_err(from_pvr_device(pvr_dev), "Firmware failed to boot\n");
 		goto err_fw_stop;
 	}
 
-	printf("pvr_fw_init: FIRMWARE BOOTED SUCCESSFULLY!\n");
 	fw_dev->booted = true;
 
 	return 0;
@@ -1074,7 +1063,6 @@ pvr_fw_mts_schedule(struct pvr_device *pvr_dev, u32 val)
 	/* Ensure memory is flushed before kicking MTS. */
 	wmb();
 
-	printf("mts_schedule: kick val=0x%x\n", val);
 	pvr_cr_write32(pvr_dev, ROGUE_CR_MTS_SCHEDULE, val);
 
 	/* Ensure the MTS kick goes through before continuing. */
@@ -1298,6 +1286,10 @@ pvr_fw_object_create_and_map_common(struct pvr_device *pvr_dev, size_t size,
 
 	if (fw_obj->init)
 		fw_obj->init(cpu_ptr, fw_obj->init_priv);
+
+#ifdef __FreeBSD__
+	pvr_dma_cache_wbinv(cpu_ptr, size);
+#endif
 
 	mutex_lock(&pvr_dev->fw_dev.fw_objs.lock);
 	list_add_tail(&fw_obj->node, &pvr_dev->fw_dev.fw_objs.list);

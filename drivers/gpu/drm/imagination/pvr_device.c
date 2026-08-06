@@ -181,7 +181,6 @@ static irqreturn_t pvr_device_irq_handler(int irq, void *data)
 	if (!pvr_fw_irq_pending(pvr_dev))
 		return IRQ_NONE; /* Spurious IRQ - ignore. */
 
-	printf("pvr_irq: IRQ fired!\n");
 	/* Mask the FW interrupts before waking up the thread. Will be unmasked
 	 * when the thread handler is done processing events.
 	 */
@@ -207,7 +206,6 @@ pvr_device_irq_init(struct pvr_device *pvr_dev)
 	init_waitqueue_head(&pvr_dev->kccb.rtn_q);
 
 	pvr_dev->irq = platform_get_irq(plat_dev, 0);
-	printf("pvr_irq_init: platform_get_irq=%d\n", pvr_dev->irq);
 	if (pvr_dev->irq < 0)
 		return pvr_dev->irq;
 
@@ -215,15 +213,10 @@ pvr_device_irq_init(struct pvr_device *pvr_dev)
 	pvr_fw_irq_clear(pvr_dev);
 	pvr_fw_irq_enable(pvr_dev);
 
-	{
-		int err;
-		err = devm_request_threaded_irq(drm_dev->dev, pvr_dev->irq,
-					    pvr_device_irq_handler,
-					    pvr_device_irq_thread_handler,
-					    IRQF_SHARED, "gpu", pvr_dev);
-		printf("pvr_irq_init: devm_request_threaded_irq=%d\n", err);
-		return err;
-	}
+	return devm_request_threaded_irq(drm_dev->dev, pvr_dev->irq,
+					 pvr_device_irq_handler,
+					 pvr_device_irq_thread_handler,
+					 IRQF_SHARED, "gpu", pvr_dev);
 }
 
 /**
@@ -575,29 +568,18 @@ pvr_device_init(struct pvr_device *pvr_dev)
 #endif
 
 	/* Map the control registers into memory. */
-	printf("pvr_device_init: reg_init\n");
 	err = pvr_device_reg_init(pvr_dev);
-	if (err) {
-		printf("pvr_device_init: reg_init failed %d\n", err);
+	if (err)
 		goto err_pm_runtime_put;
-	}
 
 	/* Perform GPU-specific initialization steps. */
-	printf("pvr_device_init: gpu_init\n");
 	err = pvr_device_gpu_init(pvr_dev);
-	if (err) {
-		printf("pvr_device_init: gpu_init failed %d\n", err);
+	if (err)
 		goto err_pm_runtime_put;
-	}
-	printf("pvr_device_init: gpu_init OK, firmware booted!\n");
 
-	printf("pvr_device_init: irq_init\n");
 	err = pvr_device_irq_init(pvr_dev);
-	if (err) {
-		printf("pvr_device_init: irq_init failed %d\n", err);
+	if (err)
 		goto err_device_gpu_fini;
-	}
-	printf("pvr_device_init: irq_init OK\n");
 
 	pm_runtime_put(dev);
 

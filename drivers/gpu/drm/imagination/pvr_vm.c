@@ -545,10 +545,6 @@ pvr_vm_create_context(struct pvr_device *pvr_dev, bool is_userspace_context)
 
 	err = PVR_FEATURE_VALUE(pvr_dev, virtual_address_space_bits,
 				&device_addr_bits);
-	printf("pvr_vm_create: has_va_bits=%d va_bits=%llu err=%d (need %d)\n",
-	    pvr_dev->features.has_virtual_address_space_bits,
-	    (unsigned long long)pvr_dev->features.virtual_address_space_bits,
-	    err, PVR_PAGE_TABLE_ADDR_BITS);
 	if (err) {
 		drm_err(drm_dev,
 			"Failed to get device virtual address space bits\n");

@@ -431,7 +431,6 @@ pvr_kccb_wait_for_completion(struct pvr_device *pvr_dev, u32 slot_nr,
 		*rtn_out = READ_ONCE(pvr_dev->kccb.rtn[slot_nr]);
 
 	if (!ret) {
-		struct rogue_fwif_ccb_ctl *ctrl = pvr_dev->kccb.ccb.ctrl;
 		u32 rtn_after_inv;
 
 		pvr_dma_cache_inv(&pvr_dev->kccb.rtn[slot_nr],
@@ -439,24 +438,13 @@ pvr_kccb_wait_for_completion(struct pvr_device *pvr_dev, u32 slot_nr,
 		rtn_after_inv = READ_ONCE(pvr_dev->kccb.rtn[slot_nr]);
 
 		if (rtn_after_inv & ROGUE_FWIF_KCCB_RTN_SLOT_CMD_EXECUTED) {
-			printf("kccb_wait: LATE completion slot=%u rtn=0x%x (cache stale)\n",
-			    slot_nr, rtn_after_inv);
 			if (rtn_out)
 				*rtn_out = rtn_after_inv;
 			return 0;
 		}
 
-		pvr_dma_cache_inv(ctrl, sizeof(*ctrl));
-		printf("kccb_wait: TIMEOUT slot=%u rtn=0x%x\n",
-		    slot_nr, rtn_after_inv);
-		printf("kccb_wait: write_ofs=%u read_ofs=%u wrap=%u\n",
-		    READ_ONCE(ctrl->write_offset),
-		    READ_ONCE(ctrl->read_offset),
-		    READ_ONCE(ctrl->wrap_mask));
-		printf("kccb_wait: MIPS_EXC=0x%x IRQ_STATUS=0x%x fw_started=%d\n",
-		    pvr_cr_read32(pvr_dev, 0x08D0),
-		    pvr_cr_read32(pvr_dev, 0x08A8),
-		    READ_ONCE(pvr_dev->fw_dev.fwif_sysinit->firmware_started));
+		pvr_dma_cache_inv(pvr_dev->kccb.ccb.ctrl,
+		    sizeof(struct rogue_fwif_ccb_ctl));
 	}
 
 	return ret ? 0 : -ETIMEDOUT;

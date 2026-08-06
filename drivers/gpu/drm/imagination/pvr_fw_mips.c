@@ -146,15 +146,6 @@ pvr_mips_fw_process(struct pvr_device *pvr_dev, const u8 *fw,
 	boot_data->reserved1 = 0;
 	boot_data->reserved2 = 0;
 
-	printf("mips_fw: boot_code_dma=0x%llx boot_data_dma=0x%llx exc_code_dma=0x%llx\n",
-	    (unsigned long long)mips_data->boot_code_dma_addr,
-	    (unsigned long long)mips_data->boot_data_dma_addr,
-	    (unsigned long long)mips_data->exception_code_dma_addr);
-	printf("mips_fw: stack_phys=0x%llx reg_base=0x%llx pt[0]=0x%llx\n",
-	    (unsigned long long)boot_data->stack_phys_addr,
-	    (unsigned long long)boot_data->reg_base,
-	    (unsigned long long)boot_data->pt_phys_addr[0]);
-
 	return 0;
 }
 
@@ -222,11 +213,6 @@ pvr_mips_wrapper_init(struct pvr_device *pvr_dev)
 
 	/* Turn on the EJTAG probe. */
 	pvr_cr_write32(pvr_dev, ROGUE_CR_MIPS_DEBUG_CONFIG, 0);
-
-	printf("mips_wrapper: remap1=0x%llx remap2=0x%llx remap3=0x%llx\n",
-	    (unsigned long long)mips_data->boot_code_dma_addr,
-	    (unsigned long long)mips_data->boot_data_dma_addr,
-	    (unsigned long long)mips_data->exception_code_dma_addr);
 
 	return 0;
 }
