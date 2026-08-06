@@ -861,6 +861,8 @@ pvr_wait_for_fw_boot(struct pvr_device *pvr_dev)
 	struct pvr_fw_device *fw_dev = &pvr_dev->fw_dev;
 
 	while (ktime_to_ns(ktime_sub(deadline, ktime_get())) > 0) {
+		pvr_dma_cache_inv(fw_dev->fwif_sysinit,
+		    sizeof(*fw_dev->fwif_sysinit));
 		if (READ_ONCE(fw_dev->fwif_sysinit->firmware_started))
 			return 0;
 	}

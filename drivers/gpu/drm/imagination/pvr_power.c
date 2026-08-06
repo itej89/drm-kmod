@@ -47,13 +47,19 @@ pvr_power_send_command(struct pvr_device *pvr_dev, struct rogue_fwif_kccb_cmd *p
 	int err;
 
 	WRITE_ONCE(*fw_dev->power_sync, 0);
+#ifdef __FreeBSD__
+	pvr_dma_cache_wbinv(fw_dev->power_sync, sizeof(*fw_dev->power_sync));
+#endif
 
 	err = pvr_kccb_send_cmd_powered(pvr_dev, pow_cmd, &slot_nr);
 	if (err)
 		return err;
 
 	/* Wait for FW to acknowledge. */
-	return readl_poll_timeout(pvr_dev->fw_dev.power_sync, value, value != 0, 100,
+	return readl_poll_timeout(pvr_dev->fw_dev.power_sync, value,
+				  ({ pvr_dma_cache_inv(pvr_dev->fw_dev.power_sync,
+				     sizeof(*pvr_dev->fw_dev.power_sync));
+				  value != 0; }), 100,
 				  POWER_SYNC_TIMEOUT_US);
 }
 
@@ -132,6 +138,10 @@ pvr_power_is_idle(struct pvr_device *pvr_dev)
 	 * FW power state can be out of date if a KCCB command has been submitted but the FW hasn't
 	 * started processing it yet. So also check the KCCB status.
 	 */
+#ifdef __FreeBSD__
+	pvr_dma_cache_inv(pvr_dev->fw_dev.fwif_sysdata,
+	    sizeof(*pvr_dev->fw_dev.fwif_sysdata));
+#endif
 	enum rogue_fwif_pow_state pow_state = READ_ONCE(pvr_dev->fw_dev.fwif_sysdata->pow_state);
 	bool kccb_idle = pvr_kccb_is_idle(pvr_dev);
 
@@ -142,6 +152,10 @@ static bool
 pvr_watchdog_kccb_stalled(struct pvr_device *pvr_dev)
 {
 	/* Check KCCB commands are progressing. */
+#ifdef __FreeBSD__
+	pvr_dma_cache_inv(pvr_dev->fw_dev.fwif_osdata,
+	    sizeof(*pvr_dev->fw_dev.fwif_osdata));
+#endif
 	u32 kccb_cmds_executed = pvr_dev->fw_dev.fwif_osdata->kccb_cmds_executed;
 	bool kccb_is_idle = pvr_kccb_is_idle(pvr_dev);
 
@@ -375,9 +389,17 @@ pvr_power_reset(struct pvr_device *pvr_dev, bool hard_reset)
 					goto err_device_lost;
 			} else {
 				/* Clear the FW faulted flags. */
+#ifdef __FreeBSD__
+				pvr_dma_cache_inv(pvr_dev->fw_dev.fwif_sysdata,
+				    sizeof(*pvr_dev->fw_dev.fwif_sysdata));
+#endif
 				pvr_dev->fw_dev.fwif_sysdata->hwr_state_flags &=
 					~(ROGUE_FWIF_HWR_FW_FAULT |
 					  ROGUE_FWIF_HWR_RESTART_REQUESTED);
+#ifdef __FreeBSD__
+				pvr_dma_cache_wbinv(&pvr_dev->fw_dev.fwif_sysdata->hwr_state_flags,
+				    sizeof(pvr_dev->fw_dev.fwif_sysdata->hwr_state_flags));
+#endif
 			}
 
 			pvr_fw_irq_clear(pvr_dev);
