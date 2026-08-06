@@ -197,6 +197,11 @@ pvr_vm_mips_map(struct pvr_device *pvr_dev, struct pvr_fw_object *fw_obj)
 		WRITE_ONCE(mips_data->pt[pfn], pte);
 	}
 
+#ifdef __FreeBSD__
+	pvr_dma_cache_wbinv(&mips_data->pt[start_pfn],
+	    (end_pfn - start_pfn + 1) * sizeof(mips_data->pt[0]));
+#endif
+
 	pvr_mmu_flush_request_all(pvr_dev);
 
 	return 0;
@@ -204,6 +209,11 @@ pvr_vm_mips_map(struct pvr_device *pvr_dev, struct pvr_fw_object *fw_obj)
 err_unmap_pages:
 	while (--pfn >= start_pfn)
 		WRITE_ONCE(mips_data->pt[pfn], 0);
+
+#ifdef __FreeBSD__
+	pvr_dma_cache_wbinv(&mips_data->pt[start_pfn],
+	    (end_pfn - start_pfn + 1) * sizeof(mips_data->pt[0]));
+#endif
 
 	pvr_mmu_flush_request_all(pvr_dev);
 	WARN_ON(pvr_mmu_flush_exec(pvr_dev, true));
@@ -232,6 +242,12 @@ pvr_vm_mips_unmap(struct pvr_device *pvr_dev, struct pvr_fw_object *fw_obj)
 
 	for (u32 pfn = start_pfn; pfn < end_pfn; pfn++)
 		WRITE_ONCE(mips_data->pt[pfn], 0);
+
+#ifdef __FreeBSD__
+	if (end_pfn > start_pfn)
+		pvr_dma_cache_wbinv(&mips_data->pt[start_pfn],
+		    (end_pfn - start_pfn) * sizeof(mips_data->pt[0]));
+#endif
 
 	pvr_mmu_flush_request_all(pvr_dev);
 	WARN_ON(pvr_mmu_flush_exec(pvr_dev, true));
