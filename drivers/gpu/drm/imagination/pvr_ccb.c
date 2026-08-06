@@ -408,6 +408,21 @@ pvr_kccb_wait_for_completion(struct pvr_device *pvr_dev, u32 slot_nr,
 	if (ret && rtn_out)
 		*rtn_out = READ_ONCE(pvr_dev->kccb.rtn[slot_nr]);
 
+	if (!ret) {
+		struct rogue_fwif_ccb_ctl *ctrl = pvr_dev->kccb.ccb.ctrl;
+
+		printf("kccb_wait: TIMEOUT slot=%u rtn=0x%x\n",
+		    slot_nr, READ_ONCE(pvr_dev->kccb.rtn[slot_nr]));
+		printf("kccb_wait: write_ofs=%u read_ofs=%u wrap=%u\n",
+		    READ_ONCE(ctrl->write_offset),
+		    READ_ONCE(ctrl->read_offset),
+		    READ_ONCE(ctrl->wrap_mask));
+		printf("kccb_wait: MIPS_EXC=0x%x IRQ_STATUS=0x%x fw_started=%d\n",
+		    pvr_cr_read32(pvr_dev, 0x08D0),
+		    pvr_cr_read32(pvr_dev, 0x08A8),
+		    READ_ONCE(pvr_dev->fw_dev.fwif_sysinit->firmware_started));
+	}
+
 	return ret ? 0 : -ETIMEDOUT;
 }
 

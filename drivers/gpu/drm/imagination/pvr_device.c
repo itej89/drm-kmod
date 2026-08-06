@@ -181,6 +181,7 @@ static irqreturn_t pvr_device_irq_handler(int irq, void *data)
 	if (!pvr_fw_irq_pending(pvr_dev))
 		return IRQ_NONE; /* Spurious IRQ - ignore. */
 
+	printf("pvr_irq: IRQ fired!\n");
 	/* Mask the FW interrupts before waking up the thread. Will be unmasked
 	 * when the thread handler is done processing events.
 	 */

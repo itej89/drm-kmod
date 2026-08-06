@@ -1074,6 +1074,7 @@ pvr_fw_mts_schedule(struct pvr_device *pvr_dev, u32 val)
 	/* Ensure memory is flushed before kicking MTS. */
 	wmb();
 
+	printf("mts_schedule: kick val=0x%x\n", val);
 	pvr_cr_write32(pvr_dev, ROGUE_CR_MTS_SCHEDULE, val);
 
 	/* Ensure the MTS kick goes through before continuing. */
