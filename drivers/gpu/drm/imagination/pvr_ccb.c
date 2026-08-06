@@ -119,9 +119,12 @@ static __always_inline bool
 pvr_ccb_slot_available_locked(struct pvr_ccb *pvr_ccb, u32 *write_offset)
 {
 	struct rogue_fwif_ccb_ctl *ctrl = pvr_ccb->ctrl;
-	u32 next_write_offset = (READ_ONCE(ctrl->write_offset) + 1) & READ_ONCE(ctrl->wrap_mask);
+	u32 next_write_offset;
 
 	lockdep_assert_held(&pvr_ccb->lock);
+
+	pvr_dma_cache_inv(ctrl, sizeof(*ctrl));
+	next_write_offset = (READ_ONCE(ctrl->write_offset) + 1) & READ_ONCE(ctrl->wrap_mask);
 
 	if (READ_ONCE(ctrl->read_offset) != next_write_offset) {
 		if (write_offset)
@@ -224,8 +227,11 @@ pvr_kccb_used_slot_count_locked(struct pvr_device *pvr_dev)
 {
 	struct pvr_ccb *pvr_ccb = &pvr_dev->kccb.ccb;
 	struct rogue_fwif_ccb_ctl *ctrl = pvr_ccb->ctrl;
-	u32 wr_offset = READ_ONCE(ctrl->write_offset);
-	u32 rd_offset = READ_ONCE(ctrl->read_offset);
+	u32 wr_offset, rd_offset;
+
+	pvr_dma_cache_inv(ctrl, sizeof(*ctrl));
+	wr_offset = READ_ONCE(ctrl->write_offset);
+	rd_offset = READ_ONCE(ctrl->read_offset);
 	u32 used_count;
 
 	lockdep_assert_held(&pvr_ccb->lock);
@@ -466,6 +472,7 @@ pvr_kccb_is_idle(struct pvr_device *pvr_dev)
 
 	mutex_lock(&pvr_dev->kccb.ccb.lock);
 
+	pvr_dma_cache_inv(ctrl, sizeof(*ctrl));
 	idle = (READ_ONCE(ctrl->write_offset) == READ_ONCE(ctrl->read_offset));
 
 	mutex_unlock(&pvr_dev->kccb.ccb.lock);
