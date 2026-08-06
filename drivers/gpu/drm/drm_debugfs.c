@@ -343,24 +343,28 @@ int drm_debugfs_register(struct drm_minor *minor, int minor_id,
 	minor->debugfs_symlink = debugfs_create_symlink(name, root,
 							dev->unique);
 
+	printf("drm_debugfs_register: ENTER type=%d minor=%p dev=%p\n",
+	    minor->type, minor, dev);
+
 	/* NOTE Linux<->FreeBSD: Mesa needs the hw.dri sysctl tree. */
 #ifdef __FreeBSD__
-	if (minor->type != DRM_MINOR_RENDER)
+	if (minor->type != DRM_MINOR_RENDER) {
+		printf("drm_debugfs_register: calling drm_sysctl_init type=%d\n", minor->type);
 		drm_sysctl_init(minor->dev);
+		printf("drm_debugfs_register: drm_sysctl_init done\n");
+	}
 #endif
 
 	/* TODO: Only for compatibility with drivers */
 	minor->debugfs_root = dev->debugfs_root;
 
-	printf("drm_debugfs_register: minor=%p type=%d unique=%s debugfs_root=%p\n",
-	    minor, minor->type,
+	printf("drm_debugfs_register: unique=%s debugfs_root=%p render=%p\n",
 	    dev->unique ? dev->unique : "(null)",
-	    dev->debugfs_root);
-	printf("drm_debugfs_register: render=%p debugfs_init=%p\n",
-	    dev->render, dev->driver->debugfs_init);
+	    dev->debugfs_root, dev->render);
 	if (dev->driver->debugfs_init && dev->render != minor) {
 		printf("drm_debugfs_register: calling debugfs_init for type=%d\n", minor->type);
 		dev->driver->debugfs_init(minor);
+		printf("drm_debugfs_register: debugfs_init done\n");
 	}
 
 	printf("drm_debugfs_register: done type=%d\n", minor->type);

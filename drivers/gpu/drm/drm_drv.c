@@ -188,13 +188,14 @@ static int drm_minor_register(struct drm_device *dev, enum drm_minor_type type)
 		}
 	}
 
-	printf("drm_minor_register: type=%d kdev=%p, calling device_add\n",
-	    type, minor->kdev);
+	printf("drm_minor_register: type=%d kdev=%p kdev->class=%p, calling device_add\n",
+	    type, minor->kdev, minor->kdev ? minor->kdev->class : NULL);
 	ret = device_add(minor->kdev);
 	if (ret) {
 		printf("drm_minor_register: device_add failed %d\n", ret);
 		goto err_debugfs;
 	}
+	printf("drm_minor_register: device_add OK type=%d\n", type);
 
 	/* replace NULL with @minor so lookups will succeed from now on */
 	entry = xa_store(drm_minor_get_xa(type), minor->index, minor, GFP_KERNEL);
@@ -928,17 +929,23 @@ int drm_dev_register(struct drm_device *dev, unsigned long flags)
 	else
 		drm_debugfs_dev_register(dev);
 
+	printf("drm_dev_register: registering RENDER minor\n");
 	ret = drm_minor_register(dev, DRM_MINOR_RENDER);
 	if (ret)
 		goto err_minors;
+	printf("drm_dev_register: RENDER done\n");
 
+	printf("drm_dev_register: registering PRIMARY minor\n");
 	ret = drm_minor_register(dev, DRM_MINOR_PRIMARY);
 	if (ret)
 		goto err_minors;
+	printf("drm_dev_register: PRIMARY done\n");
 
+	printf("drm_dev_register: registering ACCEL minor\n");
 	ret = drm_minor_register(dev, DRM_MINOR_ACCEL);
 	if (ret)
 		goto err_minors;
+	printf("drm_dev_register: ACCEL done\n");
 
 	ret = create_compat_control_link(dev);
 	if (ret)
