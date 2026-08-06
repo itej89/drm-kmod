@@ -284,15 +284,17 @@ pvr_kccb_send_cmd_reserved_powered(struct pvr_device *pvr_dev,
 			   ROGUE_FWIF_KCCB_RTN_SLOT_NO_RESPONSE);
 	}
 #ifdef __FreeBSD__
-	pvr_dma_cache_wbinv(&kccb[old_write_offset],
-	    sizeof(struct rogue_fwif_kccb_cmd));
-	pvr_dma_cache_wbinv(&pvr_dev->kccb.rtn[old_write_offset],
-	    sizeof(pvr_dev->kccb.rtn[old_write_offset]));
+	{
+		u32 kccb_size = pvr_dev->kccb.slot_count;
+
+		pvr_dma_cache_wbinv(kccb, kccb_size * sizeof(struct rogue_fwif_kccb_cmd));
+		pvr_dma_cache_wbinv(pvr_dev->kccb.rtn, kccb_size * sizeof(*pvr_dev->kccb.rtn));
+	}
 #endif
 	mb(); /* memory barrier */
 	WRITE_ONCE(ctrl->write_offset, new_write_offset);
 #ifdef __FreeBSD__
-	pvr_dma_cache_wbinv(&ctrl->write_offset, sizeof(ctrl->write_offset));
+	pvr_dma_cache_wbinv(ctrl, sizeof(*ctrl));
 #endif
 	pvr_dev->kccb.reserved_count--;
 
