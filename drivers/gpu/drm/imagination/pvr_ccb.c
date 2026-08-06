@@ -168,10 +168,19 @@ void pvr_fwccb_process(struct pvr_device *pvr_dev)
 
 	mutex_lock(&pvr_dev->fwccb.lock);
 
+#ifdef __FreeBSD__
+	pvr_dma_cache_inv(ctrl, sizeof(*ctrl));
+#endif
 	while ((read_offset = READ_ONCE(ctrl->read_offset)) != READ_ONCE(ctrl->write_offset)) {
+#ifdef __FreeBSD__
+		pvr_dma_cache_inv(&fwccb[read_offset], sizeof(fwccb[read_offset]));
+#endif
 		struct rogue_fwif_fwccb_cmd cmd = fwccb[read_offset];
 
 		WRITE_ONCE(ctrl->read_offset, (read_offset + 1) & READ_ONCE(ctrl->wrap_mask));
+#ifdef __FreeBSD__
+		pvr_dma_cache_wbinv(&ctrl->read_offset, sizeof(ctrl->read_offset));
+#endif
 
 		/* Drop FWCCB lock while we process command. */
 		mutex_unlock(&pvr_dev->fwccb.lock);
@@ -268,8 +277,17 @@ pvr_kccb_send_cmd_reserved_powered(struct pvr_device *pvr_dev,
 		WRITE_ONCE(pvr_dev->kccb.rtn[old_write_offset],
 			   ROGUE_FWIF_KCCB_RTN_SLOT_NO_RESPONSE);
 	}
+#ifdef __FreeBSD__
+	pvr_dma_cache_wbinv(&kccb[old_write_offset],
+	    sizeof(struct rogue_fwif_kccb_cmd));
+	pvr_dma_cache_wbinv(&pvr_dev->kccb.rtn[old_write_offset],
+	    sizeof(pvr_dev->kccb.rtn[old_write_offset]));
+#endif
 	mb(); /* memory barrier */
 	WRITE_ONCE(ctrl->write_offset, new_write_offset);
+#ifdef __FreeBSD__
+	pvr_dma_cache_wbinv(&ctrl->write_offset, sizeof(ctrl->write_offset));
+#endif
 	pvr_dev->kccb.reserved_count--;
 
 	/* Kick MTS */
@@ -402,8 +420,12 @@ int
 pvr_kccb_wait_for_completion(struct pvr_device *pvr_dev, u32 slot_nr,
 			     u32 timeout, u32 *rtn_out)
 {
-	int ret = wait_event_timeout(pvr_dev->kccb.rtn_q, READ_ONCE(pvr_dev->kccb.rtn[slot_nr]) &
-				     ROGUE_FWIF_KCCB_RTN_SLOT_CMD_EXECUTED, timeout);
+	int ret = wait_event_timeout(pvr_dev->kccb.rtn_q, ({
+				     pvr_dma_cache_inv(&pvr_dev->kccb.rtn[slot_nr],
+				         sizeof(pvr_dev->kccb.rtn[slot_nr]));
+				     READ_ONCE(pvr_dev->kccb.rtn[slot_nr]) &
+				     ROGUE_FWIF_KCCB_RTN_SLOT_CMD_EXECUTED;
+				     }), timeout);
 
 	if (ret && rtn_out)
 		*rtn_out = READ_ONCE(pvr_dev->kccb.rtn[slot_nr]);

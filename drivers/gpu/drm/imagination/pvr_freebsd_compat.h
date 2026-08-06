@@ -316,4 +316,45 @@ struct elf32_phdr {
 #define	ULL(x)	(x##ULL)
 #endif
 
+/*
+ * Cache flush for non-coherent DMA (RISC-V).
+ *
+ * On JH7110 (SiFive U74), vmap with pgprot_writecombine produces cacheable
+ * mappings because: (1) vmap() ignores pgprot, and (2) the U74 doesn't
+ * support Svpbmt PTE memory attributes.  CPU writes to GPU shared memory
+ * (KCCB, FW control structures) stay in L1/L2 cache, invisible to the
+ * GPU's MIPS firmware processor.
+ *
+ * pvr_dma_cache_wbinv flushes a virtual address range through both the
+ * CPU L1 data cache and the SiFive L2 cache controller (ccache) so the
+ * data reaches main memory.
+ *
+ * pvr_dma_cache_inv invalidates a virtual address range so the CPU reads
+ * fresh data written by the GPU.
+ */
+#if defined(__riscv)
+#include <machine/md_var.h>	/* cpu_dcache_wbinv_range, cpu_dcache_inv_range */
+#include <vm/vm.h>
+#include <vm/pmap.h>		/* vtophys */
+
+void sifive_ccache_flush_range(vm_paddr_t, unsigned long);
+
+static inline void
+pvr_dma_cache_wbinv(void *vaddr, size_t size)
+{
+	cpu_dcache_wbinv_range((vm_offset_t)vaddr, size);
+	sifive_ccache_flush_range(vtophys(vaddr), size);
+}
+
+static inline void
+pvr_dma_cache_inv(void *vaddr, size_t size)
+{
+	cpu_dcache_inv_range((vm_offset_t)vaddr, size);
+	sifive_ccache_flush_range(vtophys(vaddr), size);
+}
+#else
+static inline void pvr_dma_cache_wbinv(void *vaddr, size_t size) {}
+static inline void pvr_dma_cache_inv(void *vaddr, size_t size) {}
+#endif
+
 #endif /* _PVR_FREEBSD_COMPAT_H_ */
