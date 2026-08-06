@@ -366,11 +366,16 @@ struct device *drm_sysfs_minor_alloc(struct drm_minor *minor)
 		kdev->type = &drm_sysfs_device_minor;
 	}
 
+	printf("drm_sysfs_minor_alloc: type=%d kdev=%p drm_class=%p kdev->class=%p\n",
+	    minor->type, kdev, drm_class, kdev->class);
+
 	kdev->parent = minor->dev->dev;
 	kdev->release = drm_sysfs_release;
 #ifdef __FreeBSD__
+	printf("drm_sysfs_minor_alloc: calling device_initialize, class=%p\n", kdev->class);
 	/* FreeBSD depends on kdev->devt initialized already */
 	device_initialize(kdev);
+	printf("drm_sysfs_minor_alloc: after device_initialize, class=%p\n", kdev->class);
 #endif
 	dev_set_drvdata(kdev, minor);
 
