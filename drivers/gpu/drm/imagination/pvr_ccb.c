@@ -180,6 +180,17 @@ void pvr_fwccb_process(struct pvr_device *pvr_dev)
 #endif
 		struct rogue_fwif_fwccb_cmd cmd = fwccb[read_offset];
 
+#ifdef __FreeBSD__
+		{
+			u32 *raw = (u32 *)&fwccb[read_offset];
+			printf("pvr_fwccb_recv: slot=%u cmd_type=0x%x raw[0..3]=0x%x 0x%x 0x%x 0x%x "
+			    "fwccb_va=%p ctrl_va=%p\n",
+			    read_offset, cmd.cmd_type,
+			    raw[0], raw[1], raw[2], raw[3],
+			    (void *)fwccb, (void *)ctrl);
+		}
+#endif
+
 		WRITE_ONCE(ctrl->read_offset, (read_offset + 1) & READ_ONCE(ctrl->wrap_mask));
 #ifdef __FreeBSD__
 		pvr_dma_cache_wbinv(&ctrl->read_offset, sizeof(ctrl->read_offset));
@@ -286,6 +297,13 @@ pvr_kccb_send_cmd_reserved_powered(struct pvr_device *pvr_dev,
 #ifdef __FreeBSD__
 	{
 		u32 kccb_size = pvr_dev->kccb.slot_count;
+		u32 *raw = (u32 *)&kccb[old_write_offset];
+
+		printf("pvr_kccb_send: slot=%u cmd_type=0x%x cmd_raw[0..3]=0x%x 0x%x 0x%x 0x%x "
+		    "kccb_va=%p ctrl_va=%p\n",
+		    old_write_offset, cmd->cmd_type,
+		    raw[0], raw[1], raw[2], raw[3],
+		    (void *)kccb, (void *)ctrl);
 
 		pvr_dma_cache_wbinv(kccb, kccb_size * sizeof(struct rogue_fwif_kccb_cmd));
 		pvr_dma_cache_wbinv(pvr_dev->kccb.rtn, kccb_size * sizeof(*pvr_dev->kccb.rtn));
@@ -295,6 +313,9 @@ pvr_kccb_send_cmd_reserved_powered(struct pvr_device *pvr_dev,
 	WRITE_ONCE(ctrl->write_offset, new_write_offset);
 #ifdef __FreeBSD__
 	pvr_dma_cache_wbinv(ctrl, sizeof(*ctrl));
+	printf("pvr_kccb_send: write_offset=%u->%u read_offset=%u\n",
+	    old_write_offset, new_write_offset,
+	    READ_ONCE(ctrl->read_offset));
 #endif
 	pvr_dev->kccb.reserved_count--;
 

@@ -339,18 +339,30 @@ struct elf32_phdr {
 
 void sifive_ccache_flush_range(vm_paddr_t, unsigned long);
 
+static int pvr_cache_trace_enable = 0;
+
 static inline void
 pvr_dma_cache_wbinv(void *vaddr, size_t size)
 {
+	vm_paddr_t pa = vtophys(vaddr);
+
+	if (pvr_cache_trace_enable)
+		printf("pvr_cache_wbinv: va=%p pa=0x%lx size=%zu\n",
+		    vaddr, (unsigned long)pa, size);
 	cpu_dcache_wbinv_range((vm_offset_t)vaddr, size);
-	sifive_ccache_flush_range(vtophys(vaddr), size);
+	sifive_ccache_flush_range(pa, size);
 }
 
 static inline void
 pvr_dma_cache_inv(void *vaddr, size_t size)
 {
+	vm_paddr_t pa = vtophys(vaddr);
+
+	if (pvr_cache_trace_enable)
+		printf("pvr_cache_inv: va=%p pa=0x%lx size=%zu\n",
+		    vaddr, (unsigned long)pa, size);
 	cpu_dcache_inv_range((vm_offset_t)vaddr, size);
-	sifive_ccache_flush_range(vtophys(vaddr), size);
+	sifive_ccache_flush_range(pa, size);
 }
 #else
 static inline void pvr_dma_cache_wbinv(void *vaddr, size_t size) {}
