@@ -338,6 +338,7 @@ struct elf32_phdr {
 #include <vm/pmap.h>		/* vtophys */
 
 void sifive_ccache_flush_range(vm_paddr_t, unsigned long);
+void sifive_ccache_flush_all(void);
 
 static int pvr_cache_trace_enable = 0;
 

@@ -665,6 +665,19 @@ static void pvr_queue_submit_job_to_cccb(struct pvr_job *job)
 		cmd->partial_render_geom_frag_fence.value = job->done_fence->seqno - 1;
 	}
 
+	/*
+	 * On non-coherent RISC-V, userspace writes to mmap'd GEM BOs
+	 * (shader code, control streams, descriptors) may sit in the
+	 * L1/L2 cache, invisible to the GPU which reads via DMA.
+	 * Flush all caches before submitting the job.
+	 */
+#ifdef __FreeBSD__
+	{
+		extern void sifive_ccache_flush_all(void);
+		sifive_ccache_flush_all();
+	}
+#endif
+
 	/* Submit job to FW */
 	pvr_cccb_write_command_with_header(cccb, job->fw_ccb_cmd_type, job->cmd_len, job->cmd,
 					   job->id, job->id);
