@@ -609,12 +609,13 @@ EXPORT_SYMBOL_GPL(drm_gem_shmem_mmap);
 static vm_fault_t drm_gem_shmem_fault(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
-	struct drm_gem_shmem_object *shmem = to_drm_gem_shmem_obj(vma->vm_private_data);
+	struct drm_gem_object *obj = vma->vm_private_data;
+	struct drm_gem_shmem_object *shmem = to_drm_gem_shmem_obj(obj);
 	struct page *page;
 	pgoff_t page_offset;
 
-	page_offset = (vmf->address - vma->vm_start) >> PAGE_SHIFT;
-	if (!shmem->pages || page_offset >= (shmem->base.size >> PAGE_SHIFT))
+	page_offset = vmf->pgoff;
+	if (!shmem->pages || page_offset >= (obj->size >> PAGE_SHIFT))
 		return (VM_FAULT_SIGBUS);
 
 	page = shmem->pages[page_offset];
@@ -626,8 +627,24 @@ static vm_fault_t drm_gem_shmem_fault(struct vm_fault *vmf)
 	return (0);
 }
 
+static void drm_gem_shmem_vm_open(struct vm_area_struct *vma)
+{
+	struct drm_gem_object *obj = vma->vm_private_data;
+
+	drm_gem_object_get(obj);
+}
+
+static void drm_gem_shmem_vm_close(struct vm_area_struct *vma)
+{
+	struct drm_gem_object *obj = vma->vm_private_data;
+
+	drm_gem_object_put(obj);
+}
+
 const struct vm_operations_struct drm_gem_shmem_vm_ops = {
 	.fault = drm_gem_shmem_fault,
+	.open = drm_gem_shmem_vm_open,
+	.close = drm_gem_shmem_vm_close,
 };
 EXPORT_SYMBOL_GPL(drm_gem_shmem_vm_ops);
 
