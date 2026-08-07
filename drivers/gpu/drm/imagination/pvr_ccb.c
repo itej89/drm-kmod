@@ -152,6 +152,20 @@ process_fwccb_command(struct pvr_device *pvr_dev, struct rogue_fwif_fwccb_cmd *c
 		pvr_free_list_process_grow_req(pvr_dev, &cmd->cmd_data.cmd_free_list_gs);
 		break;
 
+	case ROGUE_FWIF_FWCCB_CMD_CONTEXT_RESET_NOTIFICATION: {
+		struct rogue_fwif_fwccb_cmd_context_reset_data *data =
+			&cmd->cmd_data.cmd_context_reset_notification;
+		drm_err(from_pvr_device(pvr_dev),
+			"FW context reset: reason=%u dm=%u ctx_id=%u job_ref=%u "
+			"flags=0x%x pc_addr=0x%llx fault_addr=0x%llx\n",
+			data->reset_reason, data->dm,
+			data->server_common_context_id, data->reset_job_ref,
+			data->flags,
+			(unsigned long long)data->pc_address,
+			(unsigned long long)data->fault_address);
+		break;
+	}
+
 	default:
 		drm_info(from_pvr_device(pvr_dev), "Received unknown FWCCB command %x\n",
 			 cmd->cmd_type);
