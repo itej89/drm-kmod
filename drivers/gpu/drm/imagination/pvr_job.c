@@ -240,6 +240,19 @@ pvr_compute_job_fw_cmd_init(struct pvr_job *job,
 	cmd = job->cmd;
 	cmd->common.frame_num = 0;
 	cmd->flags = convert_compute_flags(args->flags);
+
+#ifdef __FreeBSD__
+	printf("pvr_compute_job: cdm_ctrl_stream_base=0x%llx "
+	    "cdm_context_state=0x%llx tpu_border=0x%llx "
+	    "cdm_item=0x%x compute_cluster=0x%x flags=0x%x "
+	    "num_temp_regions=%u stream_len=%u\n",
+	    (unsigned long long)cmd->regs.cdm_ctrl_stream_base,
+	    (unsigned long long)cmd->regs.cdm_context_state_base_addr,
+	    (unsigned long long)cmd->regs.tpu_border_colour_table,
+	    cmd->regs.cdm_item, cmd->regs.compute_cluster,
+	    cmd->flags, cmd->num_temp_regions,
+	    args->cmd_stream_len);
+#endif
 	return 0;
 }
 
