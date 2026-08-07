@@ -606,12 +606,48 @@ int drm_gem_shmem_mmap(struct drm_gem_shmem_object *shmem, struct vm_area_struct
 }
 EXPORT_SYMBOL_GPL(drm_gem_shmem_mmap);
 #elif defined(__FreeBSD__)
-const struct vm_operations_struct drm_gem_shmem_vm_ops = { 0 };
+static vm_fault_t drm_gem_shmem_fault(struct vm_fault *vmf)
+{
+	struct vm_area_struct *vma = vmf->vma;
+	struct drm_gem_shmem_object *shmem = to_drm_gem_shmem_obj(vma->vm_private_data);
+	struct page *page;
+	pgoff_t page_offset;
+
+	page_offset = (vmf->address - vma->vm_start) >> PAGE_SHIFT;
+	if (!shmem->pages || page_offset >= (shmem->base.size >> PAGE_SHIFT))
+		return (VM_FAULT_SIGBUS);
+
+	page = shmem->pages[page_offset];
+	if (!page)
+		return (VM_FAULT_SIGBUS);
+
+	get_page(page);
+	vmf->page = page;
+	return (0);
+}
+
+const struct vm_operations_struct drm_gem_shmem_vm_ops = {
+	.fault = drm_gem_shmem_fault,
+};
 EXPORT_SYMBOL_GPL(drm_gem_shmem_vm_ops);
 
 int drm_gem_shmem_mmap(struct drm_gem_shmem_object *shmem, struct vm_area_struct *vma)
 {
-	return (-ENOSYS);
+	int ret;
+
+	dma_resv_lock(shmem->base.resv, NULL);
+	ret = drm_gem_shmem_get_pages(shmem);
+	dma_resv_unlock(shmem->base.resv);
+
+	if (ret)
+		return (ret);
+
+	vm_flags_set(vma, VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP);
+	vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
+	if (shmem->map_wc)
+		vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
+
+	return (0);
 }
 EXPORT_SYMBOL_GPL(drm_gem_shmem_mmap);
 #endif
