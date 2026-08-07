@@ -615,21 +615,14 @@ static vm_fault_t drm_gem_shmem_fault(struct vm_fault *vmf)
 	pgoff_t page_offset;
 	vm_fault_t ret;
 
-	if (vma == NULL) {
-		printf("drm_gem_shmem_fault: vma is NULL!\n");
+	if (vma == NULL)
 		return (VM_FAULT_SIGBUS);
-	}
 
 	obj = vma->vm_private_data;
-	if (obj == NULL) {
-		printf("drm_gem_shmem_fault: obj is NULL!\n");
+	if (obj == NULL)
 		return (VM_FAULT_SIGBUS);
-	}
 
 	shmem = to_drm_gem_shmem_obj(obj);
-
-	printf("drm_gem_shmem_fault: vma=%p obj=%p pages=%p size=%zu addr=%p\n",
-	    vma, obj, shmem->pages, obj->size, vmf->virtual_address);
 
 	page_offset = (uintptr_t)vmf->virtual_address >> PAGE_SHIFT;
 	if (!shmem->pages || page_offset >= (obj->size >> PAGE_SHIFT))
