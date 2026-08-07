@@ -651,6 +651,14 @@ static vm_fault_t drm_gem_shmem_fault(struct vm_fault *vmf)
 static void drm_gem_shmem_vm_open(struct vm_area_struct *vma)
 {
 	struct drm_gem_object *obj = vma->vm_private_data;
+	struct drm_gem_shmem_object *shmem = to_drm_gem_shmem_obj(obj);
+
+	drm_WARN_ON(obj->dev, obj->import_attach);
+
+	dma_resv_lock(shmem->base.resv, NULL);
+	if (!drm_WARN_ON_ONCE(obj->dev, !shmem->pages_use_count))
+		shmem->pages_use_count++;
+	dma_resv_unlock(shmem->base.resv);
 
 	drm_gem_object_get(obj);
 }
@@ -658,6 +666,11 @@ static void drm_gem_shmem_vm_open(struct vm_area_struct *vma)
 static void drm_gem_shmem_vm_close(struct vm_area_struct *vma)
 {
 	struct drm_gem_object *obj = vma->vm_private_data;
+	struct drm_gem_shmem_object *shmem = to_drm_gem_shmem_obj(obj);
+
+	dma_resv_lock(shmem->base.resv, NULL);
+	drm_gem_shmem_put_pages(shmem);
+	dma_resv_unlock(shmem->base.resv);
 
 	drm_gem_object_put(obj);
 }
