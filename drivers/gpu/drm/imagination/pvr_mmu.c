@@ -2530,6 +2530,11 @@ pvr_mmu_map_sgl(struct pvr_mmu_op_context *op_ctx, struct scatterlist *sgl,
 	 * Create first page outside loop, as it doesn't require a page advance
 	 * beforehand.
 	 */
+#ifdef __FreeBSD__
+	if (pages <= 4)
+		printf("pvr_mmu_map_sgl: dma_addr=0x%llx pages=%u dma_len=%u\n",
+		    (unsigned long long)dma_addr, pages, dma_len);
+#endif
 	err = pvr_page_create(op_ctx, dma_addr, page_flags);
 	if (err)
 		return err;
