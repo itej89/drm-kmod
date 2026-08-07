@@ -609,11 +609,27 @@ EXPORT_SYMBOL_GPL(drm_gem_shmem_mmap);
 static vm_fault_t drm_gem_shmem_fault(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
-	struct drm_gem_object *obj = vma->vm_private_data;
-	struct drm_gem_shmem_object *shmem = to_drm_gem_shmem_obj(obj);
+	struct drm_gem_object *obj;
+	struct drm_gem_shmem_object *shmem;
 	struct page *page;
 	pgoff_t page_offset;
 	vm_fault_t ret;
+
+	if (vma == NULL) {
+		printf("drm_gem_shmem_fault: vma is NULL!\n");
+		return (VM_FAULT_SIGBUS);
+	}
+
+	obj = vma->vm_private_data;
+	if (obj == NULL) {
+		printf("drm_gem_shmem_fault: obj is NULL!\n");
+		return (VM_FAULT_SIGBUS);
+	}
+
+	shmem = to_drm_gem_shmem_obj(obj);
+
+	printf("drm_gem_shmem_fault: vma=%p obj=%p pages=%p size=%zu addr=%p\n",
+	    vma, obj, shmem->pages, obj->size, vmf->virtual_address);
 
 	page_offset = (uintptr_t)vmf->virtual_address >> PAGE_SHIFT;
 	if (!shmem->pages || page_offset >= (obj->size >> PAGE_SHIFT))
