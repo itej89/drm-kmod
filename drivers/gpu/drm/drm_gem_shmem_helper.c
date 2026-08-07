@@ -614,7 +614,7 @@ static vm_fault_t drm_gem_shmem_fault(struct vm_fault *vmf)
 	struct page *page;
 	pgoff_t page_offset;
 
-	page_offset = vmf->pgoff;
+	page_offset = (uintptr_t)vmf->virtual_address >> PAGE_SHIFT;
 	if (!shmem->pages || page_offset >= (obj->size >> PAGE_SHIFT))
 		return (VM_FAULT_SIGBUS);
 
@@ -622,9 +622,9 @@ static vm_fault_t drm_gem_shmem_fault(struct vm_fault *vmf)
 	if (!page)
 		return (VM_FAULT_SIGBUS);
 
-	get_page(page);
-	vmf->page = page;
-	return (0);
+	return (lkpi_vmf_insert_pfn_prot_locked(vma,
+	    (uintptr_t)vmf->virtual_address,
+	    page_to_pfn(page), vma->vm_page_prot));
 }
 
 static void drm_gem_shmem_vm_open(struct vm_area_struct *vma)
