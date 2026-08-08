@@ -1076,6 +1076,40 @@ pvr_fw_init(struct pvr_device *pvr_dev)
 
 	fw_dev->booted = true;
 
+	/*
+	 * Two-stage RASCALDUST boot for BXE-4-32 (JH7110):
+	 * Stage 1 (above): boot with POW_RASCALDUST to bring DUST power
+	 * islands up from cold.
+	 * Stage 2 (below): hard reset the firmware WITHOUT RASCALDUST so
+	 * the firmware power manager never runs and never zeroes
+	 * CR_PDS_EXEC_BASE between jobs.
+	 */
+	if (fw_dev->fwif_sysdata->config_flags & ROGUE_FWIF_INICFG_POW_RASCALDUST) {
+		drm_info(from_pvr_device(pvr_dev),
+		    "Two-stage RASCALDUST: rebooting FW without RASCALDUST\n");
+		pvr_fw_stop(pvr_dev);
+		fw_dev->fwif_sysdata->config_flags &=
+		    ~ROGUE_FWIF_INICFG_POW_RASCALDUST;
+#ifdef __FreeBSD__
+		pvr_dma_cache_wbinv(fw_dev->fwif_sysdata,
+		    sizeof(*fw_dev->fwif_sysdata));
+#endif
+		err = pvr_fw_start(pvr_dev);
+		if (err) {
+			drm_err(from_pvr_device(pvr_dev),
+			    "Stage 2 FW start failed\n");
+			goto err_fw_stop;
+		}
+		err = pvr_wait_for_fw_boot(pvr_dev);
+		if (err) {
+			drm_err(from_pvr_device(pvr_dev),
+			    "Stage 2 FW boot failed\n");
+			goto err_fw_stop;
+		}
+		drm_info(from_pvr_device(pvr_dev),
+		    "Two-stage RASCALDUST complete, FW running without RASCALDUST\n");
+	}
+
 	return 0;
 
 err_fw_stop:
