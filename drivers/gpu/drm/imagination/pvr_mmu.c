@@ -2530,11 +2530,6 @@ pvr_mmu_map_sgl(struct pvr_mmu_op_context *op_ctx, struct scatterlist *sgl,
 	 * Create first page outside loop, as it doesn't require a page advance
 	 * beforehand.
 	 */
-#ifdef __FreeBSD__
-	if (dma_addr > 0xFFFFFFFFULL || (dma_addr + size) > 0x100000000ULL)
-		printf("pvr_mmu_map_sgl: WARNING dma_addr=0x%llx ABOVE 32-bit! pages=%u\n",
-		    (unsigned long long)dma_addr, pages);
-#endif
 	err = pvr_page_create(op_ctx, dma_addr, page_flags);
 	if (err)
 		return err;
