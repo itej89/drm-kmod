@@ -1496,6 +1496,38 @@ pvr_fw_hard_reset(struct pvr_device *pvr_dev)
 	return 0;
 }
 
+/**
+ * pvr_fw_program_heap_bases() - Re-program PDS and USC heap base registers
+ * @pvr_dev: Target PowerVR device.
+ *
+ * On BXE-4-32 (JH7110), firmware power management can wipe the PDS and
+ * USC code base registers. Re-program them before every job submission.
+ * Based on domibel's Linux patch for VisionFive 2.
+ */
+void
+pvr_fw_program_heap_bases(struct pvr_device *pvr_dev)
+{
+	pvr_cr_write32(pvr_dev, 0x00610,
+		       (u32)(ROGUE_PDSCODEDATA_HEAP_BASE & 0xFFFFFFFFU));
+	pvr_cr_write32(pvr_dev, 0x00614,
+		       (u32)(ROGUE_PDSCODEDATA_HEAP_BASE >> 32));
+
+	pvr_cr_write32(pvr_dev, 0x04008,
+		       (u32)(ROGUE_USCCODE_HEAP_BASE & 0xFFFFFFFFU));
+	pvr_cr_write32(pvr_dev, 0x0400c,
+		       (u32)(ROGUE_USCCODE_HEAP_BASE >> 32));
+
+	pvr_cr_write32(pvr_dev, 0x04010,
+		       (u32)(ROGUE_USCCODE_HEAP_BASE & 0xFFFFFFFFU));
+	pvr_cr_write32(pvr_dev, 0x04014,
+		       (u32)(ROGUE_USCCODE_HEAP_BASE >> 32));
+
+	pvr_cr_write32(pvr_dev, 0x04028,
+		       (u32)(ROGUE_USCCODE_HEAP_BASE & 0xFFFFFFFFU));
+	pvr_cr_write32(pvr_dev, 0x0402c,
+		       (u32)(ROGUE_USCCODE_HEAP_BASE >> 32));
+}
+
 #ifdef __FreeBSD__
 /**
  * pvr_fw_sync_all_for_device() - Flush all FW objects from CPU cache

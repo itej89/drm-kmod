@@ -666,10 +666,14 @@ static void pvr_queue_submit_job_to_cccb(struct pvr_job *job)
 	}
 
 	/*
-	 * On non-coherent RISC-V (JH7110), flush all FW object
-	 * backing pages through the SiFive L2 cache so the GPU
-	 * firmware sees consistent data via DMA.
+	 * On BXE-4-32 (JH7110), re-program PDS/USC heap base registers
+	 * which may have been wiped by firmware power management, and
+	 * flush FW object backing pages through the L2 cache.
 	 */
+	{
+		extern void pvr_fw_program_heap_bases(struct pvr_device *);
+		pvr_fw_program_heap_bases(job->pvr_dev);
+	}
 #ifdef __FreeBSD__
 	{
 		extern void pvr_fw_sync_all_for_device(struct pvr_device *);
