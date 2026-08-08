@@ -408,7 +408,7 @@ fw_sysinit_init(void *cpu_ptr, void *priv)
 	fwif_sysinit->hw_perf_filter = 0;
 	fwif_sysinit->firmware_perf = FW_PERF_CONF_NONE;
 	fwif_sysinit->initial_core_clock_speed = clock_speed_hz;
-	fwif_sysinit->active_pm_latency_ms = 0;
+	fwif_sysinit->active_pm_latency_ms = 100;
 	fwif_sysinit->gpio_validation_mode = ROGUE_FWIF_GPIO_VAL_OFF;
 	fwif_sysinit->firmware_started = false;
 	fwif_sysinit->marker_val = 1;
@@ -432,10 +432,7 @@ fw_sysdata_init(void *cpu_ptr, void *priv)
 	if (slc_size_in_kilobytes < ROGUE_FWIF_SLC_MIN_SIZE_FOR_DM_OVERLAP_KB)
 		config_flags |= ROGUE_FWIF_INICFG_DISABLE_DM_OVERLAP;
 
-#ifdef __FreeBSD__
-	if (pvr_pow_rascaldust_enable)
-#endif
-		config_flags |= ROGUE_FWIF_INICFG_POW_RASCALDUST;
+	config_flags |= ROGUE_FWIF_INICFG_POW_RASCALDUST;
 
 	fwif_sysdata->config_flags = config_flags;
 }
@@ -450,10 +447,52 @@ fw_runtime_cfg_init(void *cpu_ptr, void *priv)
 	WARN_ON(!clock_speed_hz);
 
 	runtime_cfg->core_clock_speed = clock_speed_hz;
-	runtime_cfg->active_pm_latency_ms = 0;
+	runtime_cfg->active_pm_latency_ms = 100;
 	runtime_cfg->active_pm_latency_persistant = true;
 	WARN_ON(PVR_FEATURE_VALUE(pvr_dev, num_clusters,
 				  &runtime_cfg->default_dusts_num_init) != 0);
+}
+
+static void
+fw_reg_cfg_init(void *cpu_ptr, void *priv)
+{
+	struct rogue_fwif_reg_cfg *reg_cfg = cpu_ptr;
+	int idx = 0;
+
+	/*
+	 * Tell the firmware to restore PDS_EXEC_BASE and USC_CODE_BASE
+	 * after every DUST power change and power-on event. Without this,
+	 * the RASCALDUST power management zeroes these registers and the
+	 * firmware doesn't restore them, causing transfer/blit jobs to
+	 * fault at raw heap offsets (e.g. 0x2740 instead of 0xDA00002740).
+	 */
+
+	/* PDS_EXEC_BASE on DUST_CHANGE */
+	reg_cfg->reg_configs[idx].sddr = 0x00610;
+	reg_cfg->reg_configs[idx].mask = ~0ULL;
+	reg_cfg->reg_configs[idx].value = ROGUE_PDSCODEDATA_HEAP_BASE;
+	idx++;
+
+	/* USC_CODE_BASE (transfer) on DUST_CHANGE */
+	reg_cfg->reg_configs[idx].sddr = 0x04008;
+	reg_cfg->reg_configs[idx].mask = ~0ULL;
+	reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
+	idx++;
+
+	/* USC_CODE_BASE (graphics) on DUST_CHANGE */
+	reg_cfg->reg_configs[idx].sddr = 0x04010;
+	reg_cfg->reg_configs[idx].mask = ~0ULL;
+	reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
+	idx++;
+
+	/* USC_CODE_BASE (compute) on DUST_CHANGE */
+	reg_cfg->reg_configs[idx].sddr = 0x04028;
+	reg_cfg->reg_configs[idx].mask = ~0ULL;
+	reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
+	idx++;
+
+	reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_PWR_ON] = 0;
+	reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_DUST_CHANGE] = idx;
 }
 
 static void
@@ -573,6 +612,37 @@ pvr_fw_create_structures(struct pvr_device *pvr_dev)
 		drm_err(drm_dev, "Unable to allocate FW SYSINIT structure\n");
 		err = PTR_ERR(fw_dev->fwif_sysinit);
 		goto err_release_osinit;
+	}
+
+	/*
+	 * Allocate register config table for firmware-side register
+	 * restore after DUST power changes. This tells the MIPS firmware
+	 * to reprogram CR_PDS_EXEC_BASE and CR_USC_CODE_BASE after every
+	 * RASCALDUST power cycle.
+	 */
+	{
+		struct pvr_fw_object *reg_cfg_obj;
+		void *reg_cfg_ptr;
+
+		reg_cfg_ptr = pvr_fw_object_create_and_map(pvr_dev,
+		    sizeof(struct rogue_fwif_reg_cfg),
+		    PVR_BO_FW_FLAGS_DEVICE_UNCACHED,
+		    fw_reg_cfg_init, NULL, &reg_cfg_obj);
+		if (!IS_ERR(reg_cfg_ptr)) {
+			pvr_fw_object_get_fw_addr(reg_cfg_obj,
+			    &fw_dev->fwif_sysinit->reg_cfg_fw_addr);
+			fw_dev->fwif_sysdata->config_flags |=
+			    ROGUE_FWIF_INICFG_REGCONFIG_EN;
+#ifdef __FreeBSD__
+			pvr_dma_cache_wbinv(fw_dev->fwif_sysinit,
+			    sizeof(*fw_dev->fwif_sysinit));
+			pvr_dma_cache_wbinv(fw_dev->fwif_sysdata,
+			    sizeof(*fw_dev->fwif_sysdata));
+#endif
+			pvr_fw_object_vunmap(reg_cfg_obj);
+			drm_info(drm_dev,
+			    "FW register config enabled for DUST_CHANGE\n");
+		}
 	}
 
 	return 0;
@@ -1520,11 +1590,6 @@ pvr_fw_hard_reset(struct pvr_device *pvr_dev)
 void
 pvr_fw_program_heap_bases(struct pvr_device *pvr_dev)
 {
-#ifdef __FreeBSD__
-	if (!pvr_pow_rascaldust_enable)
-		return;
-#endif
-
 	pvr_cr_write32(pvr_dev, 0x00610,
 		       (u32)(ROGUE_PDSCODEDATA_HEAP_BASE & 0xFFFFFFFFU));
 	pvr_cr_write32(pvr_dev, 0x00614,
