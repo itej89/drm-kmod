@@ -13,6 +13,7 @@
 #include <drm/drm_managed.h>
 #include <drm/drm_vblank_helper.h>
 
+#include "vs_bridge.h"
 #include "vs_crtc_regs.h"
 #include "vs_crtc.h"
 #include "vs_dc.h"
@@ -26,6 +27,10 @@ static void vs_crtc_atomic_disable(struct drm_crtc *crtc,
 	struct vs_crtc *vcrtc = drm_crtc_to_vs_crtc(crtc);
 	struct vs_dc *dc = vcrtc->dc;
 	unsigned int output = vcrtc->id;
+
+#ifdef __FreeBSD__
+	vs_hdmi_disable(vcrtc);
+#endif
 
 	drm_crtc_vblank_off(crtc);
 
@@ -43,6 +48,10 @@ static void vs_crtc_atomic_enable(struct drm_crtc *crtc,
 		    clk_prepare_enable(dc->pix_clk[output]));
 
 	drm_crtc_vblank_on(crtc);
+
+#ifdef __FreeBSD__
+	vs_hdmi_enable(vcrtc);
+#endif
 }
 
 static void vs_crtc_mode_set_nofb(struct drm_crtc *crtc)

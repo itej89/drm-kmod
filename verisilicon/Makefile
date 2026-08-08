@@ -11,6 +11,7 @@ KMOD=   verisilicon
 SRCS=   vs_drm.c \
 	vs_dc.c \
 	vs_crtc.c \
+	vs_bridge_fbsd.c \
 	vs_plane.c \
 	vs_primary_plane.c \
 	vs_cursor_plane.c \
