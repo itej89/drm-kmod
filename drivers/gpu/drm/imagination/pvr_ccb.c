@@ -360,6 +360,16 @@ pvr_kccb_send_cmd_reserved_powered(struct pvr_device *pvr_dev,
 	pvr_fw_mts_schedule(pvr_dev,
 			    PVR_FWIF_DM_GP & ~ROGUE_CR_MTS_SCHEDULE_DM_CLRMSK);
 
+	/*
+	 * Re-program heap bases after MTS kick. The firmware's MIPS
+	 * processor may wipe CR_PDS_EXEC_BASE during its power management
+	 * cycle triggered by the kick. Writing it again here and in the
+	 * IRQ handler covers the race window.
+	 */
+	pvr_fw_program_heap_bases(pvr_dev);
+	udelay(10);
+	pvr_fw_program_heap_bases(pvr_dev);
+
 out_unlock:
 	mutex_unlock(&pvr_ccb->lock);
 }
