@@ -74,3 +74,39 @@ err:
 	kfree(objs);
 	return ret;
 }
+
+static const struct drm_framebuffer_funcs drm_gem_fb_funcs = {
+	.destroy	= drm_gem_fb_destroy,
+	.create_handle	= drm_gem_fb_create_handle,
+};
+
+struct drm_framebuffer *
+drm_gem_fb_create_with_funcs(struct drm_device *dev, struct drm_file *file,
+			     const struct drm_mode_fb_cmd2 *mode_cmd,
+			     const struct drm_framebuffer_funcs *funcs)
+{
+	struct drm_framebuffer *fb;
+	int ret;
+
+	fb = kzalloc(sizeof(*fb), GFP_KERNEL);
+	if (!fb)
+		return ERR_PTR(-ENOMEM);
+
+	ret = drm_gem_fb_init_with_funcs(dev, fb, file, mode_cmd, funcs);
+	if (ret) {
+		kfree(fb);
+		return ERR_PTR(ret);
+	}
+
+	return fb;
+}
+EXPORT_SYMBOL_GPL(drm_gem_fb_create_with_funcs);
+
+struct drm_framebuffer *
+drm_gem_fb_create(struct drm_device *dev, struct drm_file *file,
+		  const struct drm_mode_fb_cmd2 *mode_cmd)
+{
+	return drm_gem_fb_create_with_funcs(dev, file, mode_cmd,
+					    &drm_gem_fb_funcs);
+}
+EXPORT_SYMBOL_GPL(drm_gem_fb_create);
