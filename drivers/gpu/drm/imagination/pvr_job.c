@@ -289,6 +289,23 @@ pvr_transfer_job_fw_cmd_init(struct pvr_job *job,
 	cmd = job->cmd;
 	cmd->common.frame_num = 0;
 	cmd->flags = convert_transfer_flags(args->flags);
+
+#ifdef __FreeBSD__
+	{
+		struct rogue_fwif_transfer_regs *r = &cmd->regs;
+		printf("pvr_transfer_job: pds_bgnd0=0x%llx pds_bgnd1=0x%llx "
+		    "isp_mtile_base=0x%llx isp_mtile_size=0x%x "
+		    "isp_render=0x%x isp_ctl=0x%x "
+		    "event_pds_code=0x%x event_pds_data=0x%x "
+		    "stream_len=%u\n",
+		    (unsigned long long)r->pds_bgnd0_base,
+		    (unsigned long long)r->pds_bgnd1_base,
+		    (unsigned long long)r->isp_mtile_base,
+		    r->isp_mtile_size, r->isp_render_origin, r->isp_ctl,
+		    r->event_pixel_pds_code, r->event_pixel_pds_data,
+		    args->cmd_stream_len);
+	}
+#endif
 	return 0;
 }
 
