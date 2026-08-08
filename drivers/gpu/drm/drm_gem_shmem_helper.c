@@ -633,9 +633,29 @@ static vm_fault_t drm_gem_shmem_fault(struct vm_fault *vmf)
 		return (VM_FAULT_SIGBUS);
 
 	VM_OBJECT_WLOCK(vma->vm_obj);
-	ret = lkpi_vmf_insert_pfn_prot_locked(vma,
-	    (uintptr_t)vmf->virtual_address,
-	    page_to_pfn(page), vma->vm_page_prot);
+	{
+		unsigned long pfn = page_to_pfn(page);
+#if defined(__riscv)
+		/*
+		 * On SiFive RISC-V (JH7110), there are no cache attribute
+		 * bits in PTEs. For write-combining/uncached mappings, map
+		 * through the L2 cache bypass window (PA + 0x400000000) so
+		 * userspace writes go directly to DRAM, visible to GPU DMA.
+		 * This matches what StarFive's proprietary driver does in
+		 * riscv_vmap.c with SYSPORT_MEM_PFN_OFFSET.
+		 */
+		if (shmem->map_wc) {
+			extern uint64_t sifive_ccache_uncached_offset(void);
+			uint64_t uc_off = sifive_ccache_uncached_offset();
+
+			if (uc_off != 0)
+				pfn += uc_off >> PAGE_SHIFT;
+		}
+#endif
+		ret = lkpi_vmf_insert_pfn_prot_locked(vma,
+		    (uintptr_t)vmf->virtual_address,
+		    pfn, vma->vm_page_prot);
+	}
 	VM_OBJECT_WUNLOCK(vma->vm_obj);
 
 	return (ret);
