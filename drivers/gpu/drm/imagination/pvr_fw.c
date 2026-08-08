@@ -425,7 +425,6 @@ fw_sysdata_init(void *cpu_ptr, void *priv)
 		config_flags |= ROGUE_FWIF_INICFG_DISABLE_DM_OVERLAP;
 
 	config_flags |= ROGUE_FWIF_INICFG_POW_RASCALDUST;
-	config_flags |= ROGUE_FWIF_INICFG_DISABLE_CLKGATING_EN;
 
 	fwif_sysdata->config_flags = config_flags;
 }
@@ -1510,6 +1509,17 @@ pvr_fw_hard_reset(struct pvr_device *pvr_dev)
 void
 pvr_fw_program_heap_bases(struct pvr_device *pvr_dev)
 {
+	static int trace_count = 0;
+	u32 old_lo, old_hi;
+
+	if (trace_count < 20) {
+		old_lo = pvr_cr_read32(pvr_dev, 0x00610);
+		old_hi = pvr_cr_read32(pvr_dev, 0x00614);
+		printf("heap_bases[%d]: PDS_EXEC_BASE before=0x%x_%08x\n",
+		    trace_count, old_hi, old_lo);
+		trace_count++;
+	}
+
 	pvr_cr_write32(pvr_dev, 0x00610,
 		       (u32)(ROGUE_PDSCODEDATA_HEAP_BASE & 0xFFFFFFFFU));
 	pvr_cr_write32(pvr_dev, 0x00614,
