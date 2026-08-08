@@ -51,14 +51,10 @@ static int vs_dc_probe(struct platform_device *pdev)
 	char pixclk_name[14];
 	int irq, ret;
 
-	dev_info(dev, "vs_dc_probe: start\n");
-
 	if (!dev->of_node) {
 		dev_err(dev, "can't find DC devices\n");
 		return -ENODEV;
 	}
-
-	dev_info(dev, "vs_dc_probe: of_node OK\n");
 
 	port_count = of_graph_get_port_count(dev->of_node);
 	if (!port_count) {
@@ -69,8 +65,6 @@ static int vs_dc_probe(struct platform_device *pdev)
 		dev_err(dev, "too many DC downstream ports than possible\n");
 		return -EINVAL;
 	}
-
-	dev_info(dev, "vs_dc_probe: port_count=%u\n", port_count);
 
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 	if (ret) {
@@ -93,8 +87,6 @@ static int vs_dc_probe(struct platform_device *pdev)
 		dev_err(dev, "can't get reset lines\n");
 		return ret;
 	}
-
-	dev_info(dev, "vs_dc_probe: resets OK, getting clocks\n");
 
 	dc->noc_disp = devm_clk_get_enabled(dev, "noc_disp");
 	if (IS_ERR(dc->noc_disp)) {
@@ -138,46 +130,32 @@ static int vs_dc_probe(struct platform_device *pdev)
 		return PTR_ERR(dc->ahb_clk);
 	}
 
-	dev_info(dev, "vs_dc_probe: all clocks OK, getting IRQ\n");
-
 	irq = platform_get_irq(pdev, 0);
-	dev_info(dev, "vs_dc_probe: irq=%d\n", irq);
 	if (irq < 0) {
 		dev_err(dev, "can't get irq\n");
 		return irq;
 	}
 
 	ret = reset_control_bulk_deassert(VSDC_RESET_COUNT, dc->rsts);
-	dev_info(dev, "vs_dc_probe: reset deassert ret=%d\n", ret);
 	if (ret) {
 		dev_err(dev, "can't deassert reset lines\n");
 		return ret;
 	}
 
 	regs = devm_platform_ioremap_resource(pdev, 0);
-	dev_info(dev, "vs_dc_probe: ioremap=%p err=%ld\n", regs, IS_ERR(regs) ? PTR_ERR(regs) : 0);
 	if (IS_ERR(regs)) {
 		dev_err(dev, "can't map registers");
 		ret = PTR_ERR(regs);
 		goto err_rst_assert;
 	}
-	{
-		u32 raw0 = readl(regs + 0x0020);
-		u32 raw1 = readl(regs + 0x0024);
-		u32 raw2 = readl(regs + 0x0030);
-		dev_info(dev, "vs_dc_probe: raw regs model=0x%x rev=0x%x cid=0x%x\n",
-			 raw0, raw1, raw2);
-	}
 
 	dc->regs = devm_regmap_init_mmio(dev, regs, &vs_dc_regmap_cfg);
-	dev_info(dev, "vs_dc_probe: regmap=%p err=%ld\n", dc->regs, IS_ERR(dc->regs) ? PTR_ERR(dc->regs) : 0);
 	if (IS_ERR(dc->regs)) {
 		ret = PTR_ERR(dc->regs);
 		goto err_rst_assert;
 	}
 
 	ret = vs_fill_chip_identity(dc->regs, &dc->identity);
-	dev_info(dev, "vs_dc_probe: identity ret=%d\n", ret);
 	if (ret)
 		goto err_rst_assert;
 

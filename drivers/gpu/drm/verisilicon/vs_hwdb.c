@@ -92,6 +92,15 @@ static struct vs_chip_identity vs_chip_identities[] = {
 	{
 		.model = 0x8200,
 		.revision = 0x5720,
+		.customer_id = 0x30E,
+
+		.display_count = 2,
+		.max_cursor_size = 64,
+		.formats = &vs_formats_no_yuv444,
+	},
+	{
+		.model = 0x8200,
+		.revision = 0x5720,
 		.customer_id = ~0U,
 
 		.display_count = 2,
@@ -130,20 +139,14 @@ static struct vs_chip_identity vs_chip_identities[] = {
 int vs_fill_chip_identity(struct regmap *regs,
 			  struct vs_chip_identity *ident)
 {
-	u32 model = 0;
-	u32 revision = 0;
-	u32 customer_id = 0;
-	int i, ret;
+	u32 model;
+	u32 revision;
+	u32 customer_id;
+	int i;
 
-	ret = regmap_read(regs, VSDC_TOP_CHIP_MODEL, &model);
-	printf("vs_fill_chip_identity: regmap_read model ret=%d\n", ret);
-	ret = regmap_read(regs, VSDC_TOP_CHIP_REV, &revision);
-	printf("vs_fill_chip_identity: regmap_read rev ret=%d\n", ret);
-	ret = regmap_read(regs, VSDC_TOP_CHIP_CUSTOMER_ID, &customer_id);
-	printf("vs_fill_chip_identity: regmap_read cust ret=%d\n", ret);
-
-	printf("vs_fill_chip_identity: model=0x%x rev=0x%x customer=0x%x\n",
-		model, revision, customer_id);
+	regmap_read(regs, VSDC_TOP_CHIP_MODEL, &model);
+	regmap_read(regs, VSDC_TOP_CHIP_REV, &revision);
+	regmap_read(regs, VSDC_TOP_CHIP_CUSTOMER_ID, &customer_id);
 
 	for (i = 0; i < ARRAY_SIZE(vs_chip_identities); i++) {
 		if (vs_chip_identities[i].model == model &&
