@@ -369,10 +369,6 @@ pvr_kccb_send_cmd_reserved_powered(struct pvr_device *pvr_dev,
 	{
 		extern void pvr_fw_program_heap_bases(struct pvr_device *);
 		pvr_fw_program_heap_bases(pvr_dev);
-		udelay(500);
-		pvr_fw_program_heap_bases(pvr_dev);
-		udelay(500);
-		pvr_fw_program_heap_bases(pvr_dev);
 	}
 
 out_unlock:
