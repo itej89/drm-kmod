@@ -207,14 +207,16 @@ pvr_gem_object_vmap(struct pvr_gem_object *pvr_obj)
 	if (err)
 		goto err_unlock;
 
-	if (pvr_obj->flags & PVR_BO_CPU_CACHED) {
+	{
 		struct device *dev = shmem_obj->base.dev->dev;
 
-		/* If shmem_obj->sgt is NULL, that means the buffer hasn't been mapped
-		 * in GPU space yet.
+		/* On non-coherent platforms (RISC-V JH7110), GPU DMA writes
+		 * go through the L2 cache at the normal PA, but CPU reads
+		 * through the uncached system port. Flush L2 so CPU sees
+		 * GPU's writes. Always sync, not just for CPU_CACHED BOs.
 		 */
 		if (shmem_obj->sgt)
-			dma_sync_sgtable_for_cpu(dev, shmem_obj->sgt, DMA_BIDIRECTIONAL);
+			dma_sync_sgtable_for_cpu(dev, shmem_obj->sgt, DMA_FROM_DEVICE);
 	}
 
 	dma_resv_unlock(obj->resv);
