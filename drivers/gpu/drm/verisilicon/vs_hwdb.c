@@ -139,6 +139,9 @@ int vs_fill_chip_identity(struct regmap *regs,
 	regmap_read(regs, VSDC_TOP_CHIP_REV, &revision);
 	regmap_read(regs, VSDC_TOP_CHIP_CUSTOMER_ID, &customer_id);
 
+	pr_info("vs_fill_chip_identity: model=0x%x rev=0x%x customer=0x%x\n",
+		model, revision, customer_id);
+
 	for (i = 0; i < ARRAY_SIZE(vs_chip_identities); i++) {
 		if (vs_chip_identities[i].model == model &&
 		    vs_chip_identities[i].revision == revision &&

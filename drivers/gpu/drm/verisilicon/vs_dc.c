@@ -116,18 +116,21 @@ static int vs_dc_probe(struct platform_device *pdev)
 	dev_info(dev, "vs_dc_probe: all clocks OK, getting IRQ\n");
 
 	irq = platform_get_irq(pdev, 0);
+	dev_info(dev, "vs_dc_probe: irq=%d\n", irq);
 	if (irq < 0) {
 		dev_err(dev, "can't get irq\n");
 		return irq;
 	}
 
 	ret = reset_control_bulk_deassert(VSDC_RESET_COUNT, dc->rsts);
+	dev_info(dev, "vs_dc_probe: reset deassert ret=%d\n", ret);
 	if (ret) {
 		dev_err(dev, "can't deassert reset lines\n");
 		return ret;
 	}
 
 	regs = devm_platform_ioremap_resource(pdev, 0);
+	dev_info(dev, "vs_dc_probe: ioremap=%p err=%ld\n", regs, IS_ERR(regs) ? PTR_ERR(regs) : 0);
 	if (IS_ERR(regs)) {
 		dev_err(dev, "can't map registers");
 		ret = PTR_ERR(regs);
@@ -135,12 +138,14 @@ static int vs_dc_probe(struct platform_device *pdev)
 	}
 
 	dc->regs = devm_regmap_init_mmio(dev, regs, &vs_dc_regmap_cfg);
+	dev_info(dev, "vs_dc_probe: regmap=%p err=%ld\n", dc->regs, IS_ERR(dc->regs) ? PTR_ERR(dc->regs) : 0);
 	if (IS_ERR(dc->regs)) {
 		ret = PTR_ERR(dc->regs);
 		goto err_rst_assert;
 	}
 
 	ret = vs_fill_chip_identity(dc->regs, &dc->identity);
+	dev_info(dev, "vs_dc_probe: identity ret=%d\n", ret);
 	if (ret)
 		goto err_rst_assert;
 
