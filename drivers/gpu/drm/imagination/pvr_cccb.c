@@ -232,6 +232,10 @@ pvr_cccb_send_kccb_kick(struct pvr_device *pvr_dev,
 
 	fill_cmd_kick_data(pvr_cccb, cctx_fw_addr, hwrt, &cmd_kick.cmd_data.cmd_kick_data);
 
+	{
+		extern void pvr_fw_program_heap_bases(struct pvr_device *);
+		pvr_fw_program_heap_bases(pvr_dev);
+	}
 #ifdef __FreeBSD__
 	{
 		extern void pvr_fw_sync_all_for_device(struct pvr_device *);
@@ -266,6 +270,10 @@ pvr_cccb_send_kccb_combined_kick(struct pvr_device *pvr_dev,
 	fill_cmd_kick_data(frag_cccb, frag_ctx_fw_addr, frag_is_pr ? NULL : hwrt,
 			   &cmd_kick.cmd_data.combined_geom_frag_cmd_kick_data.frag_cmd_kick_data);
 
+	{
+		extern void pvr_fw_program_heap_bases(struct pvr_device *);
+		pvr_fw_program_heap_bases(pvr_dev);
+	}
 #ifdef __FreeBSD__
 	{
 		extern void pvr_fw_sync_all_for_device(struct pvr_device *);
