@@ -930,6 +930,9 @@ pvr_queue_signal_done_fences(struct pvr_queue *queue)
 #ifdef __FreeBSD__
 			{
 				extern void sifive_ccache_flush_all(void);
+				mb();
+				sifive_ccache_flush_all();
+				mb();
 				sifive_ccache_flush_all();
 			}
 #endif
