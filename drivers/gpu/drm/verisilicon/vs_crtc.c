@@ -44,13 +44,17 @@ static void vs_crtc_atomic_enable(struct drm_crtc *crtc,
 	struct vs_dc *dc = vcrtc->dc;
 	unsigned int output = vcrtc->id;
 
+	printf("vs_crtc_enable: start output=%u\n", output);
 	drm_WARN_ON(&dc->drm_dev->base,
 		    clk_prepare_enable(dc->pix_clk[output]));
+	printf("vs_crtc_enable: pix_clk done\n");
 
 	drm_crtc_vblank_on(crtc);
+	printf("vs_crtc_enable: vblank_on done\n");
 
 #ifdef __FreeBSD__
 	vs_hdmi_enable(vcrtc);
+	printf("vs_crtc_enable: hdmi_enable done\n");
 #endif
 }
 
@@ -60,6 +64,10 @@ static void vs_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	struct vs_crtc *vcrtc = drm_crtc_to_vs_crtc(crtc);
 	struct vs_dc *dc = vcrtc->dc;
 	unsigned int output = vcrtc->id;
+
+	printf("vs_crtc_mode_set_nofb: %ux%u output=%u clock=%u\n",
+	       mode->hdisplay, mode->vdisplay,
+	       output, mode->crtc_clock);
 
 	regmap_write(dc->regs, VSDC_DISP_HSIZE(output),
 		     VSDC_DISP_HSIZE_DISP(mode->hdisplay) |

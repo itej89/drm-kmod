@@ -30,25 +30,32 @@ void vs_hdmi_enable(struct vs_crtc *vcrtc)
 	struct vs_dc *dc = vcrtc->dc;
 	unsigned int output = vcrtc->id;
 
+	printf("vs_hdmi_enable: start output=%u\n", output);
+
 	jh7110_hdmi_enable();
+	printf("vs_hdmi_enable: hdmi phy done\n");
 
 	regmap_write(dc->regs, VSDC_DISP_DP_CONFIG(output),
 		     VSDC_DISP_DP_CONFIG_DP_EN |
 		     VSDC_DISP_DP_CONFIG_FMT_RGB888);
+	printf("vs_hdmi_enable: dp_config done\n");
 
 	regmap_set_bits(dc->regs, VSDC_DISP_PANEL_CONFIG(output),
 			VSDC_DISP_PANEL_CONFIG_DE_EN |
 			VSDC_DISP_PANEL_CONFIG_DAT_EN |
 			VSDC_DISP_PANEL_CONFIG_CLK_EN |
 			VSDC_DISP_PANEL_CONFIG_RUNNING);
+	printf("vs_hdmi_enable: panel_config done\n");
 
 	regmap_clear_bits(dc->regs, VSDC_DISP_PANEL_START,
 			  VSDC_DISP_PANEL_START_MULTI_DISP_SYNC);
 	regmap_set_bits(dc->regs, VSDC_DISP_PANEL_START,
 			VSDC_DISP_PANEL_START_RUNNING(output));
+	printf("vs_hdmi_enable: panel_start done\n");
 
 	regmap_set_bits(dc->regs, VSDC_DISP_PANEL_CONFIG_EX(output),
 			VSDC_DISP_PANEL_CONFIG_EX_COMMIT);
+	printf("vs_hdmi_enable: commit done\n");
 }
 
 void vs_hdmi_disable(struct vs_crtc *vcrtc)
