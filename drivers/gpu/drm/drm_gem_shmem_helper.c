@@ -648,8 +648,12 @@ static vm_fault_t drm_gem_shmem_fault(struct vm_fault *vmf)
 			extern uint64_t sifive_ccache_uncached_offset(void);
 			uint64_t uc_off = sifive_ccache_uncached_offset();
 
-			if (uc_off != 0)
+			if (uc_off != 0) {
+				printf("shmem_fault: uncached pfn 0x%lx -> 0x%lx (map_wc=%d)\n",
+				    pfn, pfn + (unsigned long)(uc_off >> PAGE_SHIFT),
+				    shmem->map_wc);
 				pfn += uc_off >> PAGE_SHIFT;
+			}
 		}
 #endif
 		ret = lkpi_vmf_insert_pfn_prot_locked(vma,

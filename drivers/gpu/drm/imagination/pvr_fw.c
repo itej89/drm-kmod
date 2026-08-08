@@ -1495,3 +1495,43 @@ pvr_fw_hard_reset(struct pvr_device *pvr_dev)
 
 	return 0;
 }
+
+#ifdef __FreeBSD__
+/**
+ * pvr_fw_sync_all_for_device() - Flush all FW objects from CPU cache
+ * @pvr_dev: Target PowerVR device.
+ *
+ * On non-coherent platforms (RISC-V JH7110), kernel vmap uses the L2
+ * uncached window for FW objects, but the GPU MMU page table backing
+ * pages and other DMA-mapped buffers may have stale data in the L2
+ * cache. Flush everything the firmware might read via DMA.
+ */
+void
+pvr_fw_sync_all_for_device(struct pvr_device *pvr_dev)
+{
+	struct list_head *pos;
+	struct pvr_fw_object *fw_obj;
+	extern void sifive_ccache_flush_range(uint64_t, unsigned long);
+
+	mutex_lock(&pvr_dev->fw_dev.fw_objs.lock);
+
+	list_for_each(pos, &pvr_dev->fw_dev.fw_objs.list) {
+		fw_obj = container_of(pos, struct pvr_fw_object, node);
+
+		if (fw_obj->gem && fw_obj->gem->base.sgt) {
+			struct sg_table *sgt = fw_obj->gem->base.sgt;
+			struct scatterlist *sg;
+			int i;
+
+			for_each_sgtable_sg(sgt, sg, i) {
+				dma_addr_t da = sg_dma_address(sg);
+				size_t len = sg_dma_len(sg);
+
+				sifive_ccache_flush_range(da, len);
+			}
+		}
+	}
+
+	mutex_unlock(&pvr_dev->fw_dev.fw_objs.lock);
+}
+#endif

@@ -666,15 +666,14 @@ static void pvr_queue_submit_job_to_cccb(struct pvr_job *job)
 	}
 
 	/*
-	 * On non-coherent RISC-V, userspace writes to mmap'd GEM BOs
-	 * (shader code, control streams, descriptors) may sit in the
-	 * L1/L2 cache, invisible to the GPU which reads via DMA.
-	 * Flush all caches before submitting the job.
+	 * On non-coherent RISC-V (JH7110), flush all FW object
+	 * backing pages through the SiFive L2 cache so the GPU
+	 * firmware sees consistent data via DMA.
 	 */
 #ifdef __FreeBSD__
 	{
-		extern void sifive_ccache_flush_all(void);
-		sifive_ccache_flush_all();
+		extern void pvr_fw_sync_all_for_device(struct pvr_device *);
+		pvr_fw_sync_all_for_device(job->pvr_dev);
 	}
 #endif
 
