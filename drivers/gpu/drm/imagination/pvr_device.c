@@ -162,6 +162,11 @@ static irqreturn_t pvr_device_irq_thread_handler(int irq, void *data)
 			pvr_fwccb_process(pvr_dev);
 			pvr_kccb_wake_up_waiters(pvr_dev);
 			pvr_device_process_active_queues(pvr_dev);
+
+			{
+				extern void pvr_fw_program_heap_bases(struct pvr_device *);
+				pvr_fw_program_heap_bases(pvr_dev);
+			}
 		}
 
 		pm_runtime_mark_last_busy(from_pvr_device(pvr_dev)->dev);
