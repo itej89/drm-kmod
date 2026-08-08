@@ -26,7 +26,7 @@ static const struct of_device_id vs_dc_driver_dt_match[] = {
 	{ .compatible = "verisilicon,dc" },
 	{},
 };
-MODULE_DEVICE_TABLE(of, vs_dc_driver_dt_match);
+/* MODULE_DEVICE_TABLE(of, vs_dc_driver_dt_match); */
 
 static irqreturn_t vs_dc_irq_handler(int irq, void *private)
 {

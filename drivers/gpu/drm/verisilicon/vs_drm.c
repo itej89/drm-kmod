@@ -37,12 +37,10 @@ static int vs_gem_dumb_create(struct drm_file *file_priv,
 			      struct drm_device *drm,
 			      struct drm_mode_create_dumb *args)
 {
-	int ret;
-
 	/* The hardware wants 128B-aligned pitches for linear buffers. */
-	ret = drm_mode_size_dumb(drm, args, 128, 0);
-	if (ret)
-		return ret;
+	args->pitch = ALIGN(DIV_ROUND_UP(args->width * args->bpp, 8), 128);
+	args->size = (u64)args->pitch * args->height;
+	args->size = PAGE_ALIGN(args->size);
 
 	return drm_gem_dma_dumb_create_internal(file_priv, drm, args);
 }
@@ -58,8 +56,7 @@ static const struct drm_driver vs_drm_driver = {
 	.minor	= DRIVER_MINOR,
 
 	/* GEM Operations */
-	DRM_GEM_DMA_DRIVER_OPS_WITH_DUMB_CREATE(vs_gem_dumb_create),
-	DRM_FBDEV_DMA_DRIVER_OPS,
+	DRM_GEM_DMA_DRIVER_OPS_WITH_DUMB_CREATE(vs_gem_dumb_create)
 };
 
 static const struct drm_mode_config_funcs vs_mode_config_funcs = {

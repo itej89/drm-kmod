@@ -6,7 +6,7 @@
 #include <linux/of.h>
 #include <linux/regmap.h>
 
-#include <uapi/linux/media-bus-format.h>
+#include <linux/media-bus-format.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
