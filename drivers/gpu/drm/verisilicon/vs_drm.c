@@ -177,3 +177,10 @@ void vs_drm_handle_irq(struct vs_dc *dc, u32 irqs)
 			      "Unknown Verisilicon DC interrupt 0x%x fired!\n",
 			      irqs);
 }
+
+#ifdef __FreeBSD__
+MODULE_DEPEND(verisilicon, drmn, 2, 2, 2);
+MODULE_DEPEND(verisilicon, linuxkpi, 1, 1, 1);
+MODULE_DEPEND(verisilicon, dmabuf, 1, 1, 1);
+MODULE_DEPEND(verisilicon, ttm, 1, 1, 1);
+#endif
