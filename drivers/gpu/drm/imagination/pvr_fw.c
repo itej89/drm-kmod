@@ -425,6 +425,7 @@ fw_sysdata_init(void *cpu_ptr, void *priv)
 		config_flags |= ROGUE_FWIF_INICFG_DISABLE_DM_OVERLAP;
 
 	config_flags |= ROGUE_FWIF_INICFG_POW_RASCALDUST;
+	config_flags |= ROGUE_FWIF_INICFG_DISABLE_CLKGATING_EN;
 
 	fwif_sysdata->config_flags = config_flags;
 }
