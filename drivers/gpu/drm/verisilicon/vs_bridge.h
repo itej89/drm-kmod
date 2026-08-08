@@ -34,6 +34,15 @@ static inline struct vs_bridge *drm_bridge_to_vs_bridge(struct drm_bridge *bridg
 	return container_of(bridge, struct vs_bridge, base);
 }
 
+#ifdef __FreeBSD__
+static inline struct vs_bridge *vs_bridge_init(struct drm_device *drm_dev,
+					       struct vs_crtc *crtc)
+{
+	return NULL;
+}
+#else
 struct vs_bridge *vs_bridge_init(struct drm_device *drm_dev,
 				 struct vs_crtc *crtc);
+#endif
+
 #endif /* _VS_BRIDGE_H_ */
