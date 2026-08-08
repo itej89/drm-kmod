@@ -28,9 +28,6 @@
 #ifndef DRM_ATOMIC_H_
 #define DRM_ATOMIC_H_
 
-/* drm_atomic_commit is the newer name for drm_atomic_state in mainline */
-#define drm_atomic_commit drm_atomic_state
-
 #include <drm/drm_crtc.h>
 #include <drm/drm_util.h>
 
