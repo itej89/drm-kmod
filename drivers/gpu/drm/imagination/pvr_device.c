@@ -375,6 +375,9 @@ pvr_set_dma_info(struct pvr_device *pvr_dev)
 		return err;
 	}
 
+	drm_info(drm_dev, "GPU phys_bus_width=%u, DMA mask=0x%llx\n",
+		 phys_bus_width, (unsigned long long)DMA_BIT_MASK(phys_bus_width));
+
 	err = dma_set_mask(drm_dev->dev, DMA_BIT_MASK(phys_bus_width));
 	if (err) {
 		drm_err(drm_dev, "Failed to set DMA mask (err=%d)\n", err);

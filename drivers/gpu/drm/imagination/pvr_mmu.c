@@ -2531,9 +2531,9 @@ pvr_mmu_map_sgl(struct pvr_mmu_op_context *op_ctx, struct scatterlist *sgl,
 	 * beforehand.
 	 */
 #ifdef __FreeBSD__
-	if (pages <= 4)
-		printf("pvr_mmu_map_sgl: dma_addr=0x%llx pages=%u dma_len=%u\n",
-		    (unsigned long long)dma_addr, pages, dma_len);
+	if (dma_addr > 0xFFFFFFFFULL || (dma_addr + size) > 0x100000000ULL)
+		printf("pvr_mmu_map_sgl: WARNING dma_addr=0x%llx ABOVE 32-bit! pages=%u\n",
+		    (unsigned long long)dma_addr, pages);
 #endif
 	err = pvr_page_create(op_ctx, dma_addr, page_flags);
 	if (err)

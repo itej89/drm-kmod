@@ -36,6 +36,7 @@
 #include <linux/pagemap.h>
 #include <linux/pagevec.h>
 #include <linux/shmem_fs.h>
+#include <linux/dma-mapping.h>
 #include <linux/slab.h>
 #include <linux/string_helpers.h>
 #include <linux/types.h>
@@ -663,6 +664,7 @@ struct page **drm_gem_get_pages(struct drm_gem_object *obj)
 	vm_object_t vm_obj;
 	struct page **pages;
 	long i, npages;
+	gfp_t gfp = 0;
 
 	if (WARN_ON(!obj->filp))
 		return (ERR_PTR(-EINVAL));
@@ -673,6 +675,12 @@ struct page **drm_gem_get_pages(struct drm_gem_object *obj)
 
 	WARN_ON((obj->size & (PAGE_SIZE - 1)) != 0);
 
+	if (obj->dev && obj->dev->dev) {
+		struct linux_dma_priv *priv = obj->dev->dev->dma_priv;
+		if (priv && priv->dma_mask <= 0xFFFFFFFFULL)
+			gfp |= GFP_DMA32;
+	}
+
 	npages = obj->size >> PAGE_SHIFT;
 
 	pages = kvmalloc_array(npages, sizeof(struct page *), GFP_KERNEL);
@@ -680,7 +688,7 @@ struct page **drm_gem_get_pages(struct drm_gem_object *obj)
 		return (ERR_PTR(-ENOMEM));
 
 	for (i = 0; i < npages; i++) {
-		pages[i] = shmem_read_mapping_page(vm_obj, i);
+		pages[i] = shmem_read_mapping_page_gfp(vm_obj, i, gfp);
 		if (IS_ERR(pages[i])) {
 			int err = PTR_ERR(pages[i]);
 
