@@ -82,9 +82,10 @@ static int vs_dc_probe(struct platform_device *pdev)
 	if (!dc)
 		return -ENOMEM;
 
-	dc->rsts[0].id = "core";
-	dc->rsts[1].id = "axi";
-	dc->rsts[2].id = "ahb";
+	dc->rsts[0].id = "vout_src";
+	dc->rsts[1].id = "core";
+	dc->rsts[2].id = "axi";
+	dc->rsts[3].id = "ahb";
 
 	ret = devm_reset_control_bulk_get_optional_shared(dev, VSDC_RESET_COUNT,
 							  dc->rsts);
@@ -94,6 +95,30 @@ static int vs_dc_probe(struct platform_device *pdev)
 	}
 
 	dev_info(dev, "vs_dc_probe: resets OK, getting clocks\n");
+
+	dc->noc_disp = devm_clk_get_enabled(dev, "noc_disp");
+	if (IS_ERR(dc->noc_disp)) {
+		dev_err(dev, "can't get noc_disp clock\n");
+		return PTR_ERR(dc->noc_disp);
+	}
+
+	dc->vout_src = devm_clk_get_enabled(dev, "vout_src");
+	if (IS_ERR(dc->vout_src)) {
+		dev_err(dev, "can't get vout_src clock\n");
+		return PTR_ERR(dc->vout_src);
+	}
+
+	dc->top_vout_axi = devm_clk_get_enabled(dev, "top_vout_axi");
+	if (IS_ERR(dc->top_vout_axi)) {
+		dev_err(dev, "can't get top_vout_axi clock\n");
+		return PTR_ERR(dc->top_vout_axi);
+	}
+
+	dc->top_vout_ahb = devm_clk_get_enabled(dev, "top_vout_ahb");
+	if (IS_ERR(dc->top_vout_ahb)) {
+		dev_err(dev, "can't get top_vout_ahb clock\n");
+		return PTR_ERR(dc->top_vout_ahb);
+	}
 
 	dc->core_clk = devm_clk_get_enabled(dev, "core");
 	if (IS_ERR(dc->core_clk)) {
@@ -135,6 +160,13 @@ static int vs_dc_probe(struct platform_device *pdev)
 		dev_err(dev, "can't map registers");
 		ret = PTR_ERR(regs);
 		goto err_rst_assert;
+	}
+	{
+		u32 raw0 = readl(regs + 0x0020);
+		u32 raw1 = readl(regs + 0x0024);
+		u32 raw2 = readl(regs + 0x0030);
+		dev_info(dev, "vs_dc_probe: raw regs model=0x%x rev=0x%x cid=0x%x\n",
+			 raw0, raw1, raw2);
 	}
 
 	dc->regs = devm_regmap_init_mmio(dev, regs, &vs_dc_regmap_cfg);
