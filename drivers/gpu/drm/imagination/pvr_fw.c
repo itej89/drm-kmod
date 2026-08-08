@@ -27,6 +27,14 @@
 
 #define FW_BOOT_TIMEOUT_USEC 5000000
 
+#ifdef __FreeBSD__
+#include <sys/sysctl.h>
+static int pvr_pow_rascaldust_enable = 0;
+SYSCTL_INT(_hw, OID_AUTO, pvr_pow_rascaldust, CTLFLAG_RDTUN,
+    &pvr_pow_rascaldust_enable, 0,
+    "Enable POW_RASCALDUST for initial GPU power island bring-up");
+#endif
+
 /* Config heap occupies top 192k of the firmware heap. */
 #define PVR_ROGUE_FW_CONFIG_HEAP_GRANULARITY SZ_64K
 #define PVR_ROGUE_FW_CONFIG_HEAP_SIZE (3 * PVR_ROGUE_FW_CONFIG_HEAP_GRANULARITY)
@@ -424,7 +432,10 @@ fw_sysdata_init(void *cpu_ptr, void *priv)
 	if (slc_size_in_kilobytes < ROGUE_FWIF_SLC_MIN_SIZE_FOR_DM_OVERLAP_KB)
 		config_flags |= ROGUE_FWIF_INICFG_DISABLE_DM_OVERLAP;
 
-	config_flags |= ROGUE_FWIF_INICFG_POW_RASCALDUST;
+#ifdef __FreeBSD__
+	if (pvr_pow_rascaldust_enable)
+#endif
+		config_flags |= ROGUE_FWIF_INICFG_POW_RASCALDUST;
 
 	fwif_sysdata->config_flags = config_flags;
 }
@@ -1509,16 +1520,10 @@ pvr_fw_hard_reset(struct pvr_device *pvr_dev)
 void
 pvr_fw_program_heap_bases(struct pvr_device *pvr_dev)
 {
-	static int trace_count = 0;
-	u32 old_lo, old_hi;
-
-	if (trace_count < 20) {
-		old_lo = pvr_cr_read32(pvr_dev, 0x00610);
-		old_hi = pvr_cr_read32(pvr_dev, 0x00614);
-		printf("heap_bases[%d]: PDS_EXEC_BASE before=0x%x_%08x\n",
-		    trace_count, old_hi, old_lo);
-		trace_count++;
-	}
+#ifdef __FreeBSD__
+	if (!pvr_pow_rascaldust_enable)
+		return;
+#endif
 
 	pvr_cr_write32(pvr_dev, 0x00610,
 		       (u32)(ROGUE_PDSCODEDATA_HEAP_BASE & 0xFFFFFFFFU));
