@@ -51,10 +51,14 @@ static int vs_dc_probe(struct platform_device *pdev)
 	char pixclk_name[14];
 	int irq, ret;
 
+	dev_info(dev, "vs_dc_probe: start\n");
+
 	if (!dev->of_node) {
 		dev_err(dev, "can't find DC devices\n");
 		return -ENODEV;
 	}
+
+	dev_info(dev, "vs_dc_probe: of_node OK\n");
 
 	port_count = of_graph_get_port_count(dev->of_node);
 	if (!port_count) {
@@ -65,6 +69,8 @@ static int vs_dc_probe(struct platform_device *pdev)
 		dev_err(dev, "too many DC downstream ports than possible\n");
 		return -EINVAL;
 	}
+
+	dev_info(dev, "vs_dc_probe: port_count=%u\n", port_count);
 
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 	if (ret) {
@@ -87,6 +93,8 @@ static int vs_dc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	dev_info(dev, "vs_dc_probe: resets OK, getting clocks\n");
+
 	dc->core_clk = devm_clk_get_enabled(dev, "core");
 	if (IS_ERR(dc->core_clk)) {
 		dev_err(dev, "can't get core clock\n");
@@ -104,6 +112,8 @@ static int vs_dc_probe(struct platform_device *pdev)
 		dev_err(dev, "can't get ahb clock\n");
 		return PTR_ERR(dc->ahb_clk);
 	}
+
+	dev_info(dev, "vs_dc_probe: all clocks OK, getting IRQ\n");
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
