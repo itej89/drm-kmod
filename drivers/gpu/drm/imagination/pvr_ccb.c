@@ -338,6 +338,24 @@ pvr_kccb_send_cmd_reserved_powered(struct pvr_device *pvr_dev,
 		pvr_fw_program_heap_bases(pvr_dev);
 	}
 
+	/*
+	 * Two-stage RASCALDUST: boot with POW_RASCALDUST to init
+	 * firmware power state, then disable it after the first
+	 * kick so the firmware stops power-cycling PDS/USC units
+	 * (which wipes CR_PDS_EXEC_BASE). Matches domibel's
+	 * two-stage insmod approach for JH7110.
+	 */
+	if (pvr_dev->fw_dev.fwif_sysdata &&
+	    (pvr_dev->fw_dev.fwif_sysdata->config_flags &
+	     ROGUE_FWIF_INICFG_POW_RASCALDUST)) {
+		pvr_dev->fw_dev.fwif_sysdata->config_flags &=
+		    ~ROGUE_FWIF_INICFG_POW_RASCALDUST;
+#ifdef __FreeBSD__
+		pvr_dma_cache_wbinv(pvr_dev->fw_dev.fwif_sysdata,
+		    sizeof(*pvr_dev->fw_dev.fwif_sysdata));
+#endif
+	}
+
 	/* Kick MTS */
 	pvr_fw_mts_schedule(pvr_dev,
 			    PVR_FWIF_DM_GP & ~ROGUE_CR_MTS_SCHEDULE_DM_CLRMSK);
