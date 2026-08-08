@@ -229,11 +229,13 @@ drm_gem_dma_create_with_handle(struct drm_file *file_priv,
 void drm_gem_dma_free(struct drm_gem_dma_object *dma_obj)
 {
 	struct drm_gem_object *gem_obj = &dma_obj->base;
-	struct iosys_map map = IOSYS_MAP_INIT_VADDR(dma_obj->vaddr);
+	struct iosys_map map;
 
-	if (drm_gem_is_imported(gem_obj)) {
+	iosys_map_set_vaddr(&map, dma_obj->vaddr);
+
+	if ((gem_obj->import_attach != NULL)) {
 		if (dma_obj->vaddr)
-			dma_buf_vunmap_unlocked(gem_obj->import_attach->dmabuf, &map);
+			dma_buf_vunmap(gem_obj->import_attach->dmabuf, &map);
 		drm_prime_gem_destroy(gem_obj, dma_obj->sgt);
 	} else if (dma_obj->vaddr) {
 		if (dma_obj->map_noncoherent)
@@ -309,11 +311,10 @@ int drm_gem_dma_dumb_create(struct drm_file *file_priv,
 			    struct drm_mode_create_dumb *args)
 {
 	struct drm_gem_dma_object *dma_obj;
-	int ret;
 
-	ret = drm_mode_size_dumb(drm, args, 0, 0);
-	if (ret)
-		return ret;
+	args->pitch = DIV_ROUND_UP(args->width * args->bpp, 8);
+	args->size = (u64)args->pitch * args->height;
+	args->size = PAGE_ALIGN(args->size);
 
 	dma_obj = drm_gem_dma_create_with_handle(file_priv, drm, args->size,
 						 &args->handle);
@@ -537,7 +538,8 @@ int drm_gem_dma_mmap(struct drm_gem_dma_object *dma_obj, struct vm_area_struct *
 	 * the whole buffer.
 	 */
 	vma->vm_pgoff -= drm_vma_node_start(&obj->vma_node);
-	vm_flags_mod(vma, VM_DONTDUMP | VM_DONTEXPAND, VM_PFNMAP);
+	vm_flags_set(vma, VM_DONTDUMP | VM_DONTEXPAND);
+	vm_flags_clear(vma, VM_PFNMAP);
 
 	if (dma_obj->map_noncoherent) {
 		vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
@@ -587,7 +589,7 @@ drm_gem_dma_prime_import_sg_table_vmap(struct drm_device *dev,
 	struct iosys_map map;
 	int ret;
 
-	ret = dma_buf_vmap_unlocked(attach->dmabuf, &map);
+	ret = dma_buf_vmap(attach->dmabuf, &map);
 	if (ret) {
 		drm_err(dev, "Failed to vmap PRIME buffer\n");
 		return ERR_PTR(ret);
@@ -595,7 +597,7 @@ drm_gem_dma_prime_import_sg_table_vmap(struct drm_device *dev,
 
 	obj = drm_gem_dma_prime_import_sg_table(dev, attach, sgt);
 	if (IS_ERR(obj)) {
-		dma_buf_vunmap_unlocked(attach->dmabuf, &map);
+		dma_buf_vunmap(attach->dmabuf, &map);
 		return obj;
 	}
 
