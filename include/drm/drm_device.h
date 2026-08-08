@@ -57,6 +57,13 @@ struct drm_device {
 	struct device *dev;
 
 	/**
+	 * @dma_dev: DMA device for DMA operations.
+	 * Some devices are bound to virtual buses that cannot do DMA.
+	 * Set via drm_dev_set_dma_dev(). If NULL, @dev is used.
+	 */
+	struct device *dma_dev;
+
+	/**
 	 * @managed:
 	 *
 	 * Managed resources linked to the lifetime of this &drm_device as
@@ -331,5 +338,18 @@ struct drm_device {
 	 */
 	struct dentry *debugfs_root;
 };
+
+static inline struct device *drm_dev_dma_dev(struct drm_device *dev)
+{
+	if (dev->dma_dev)
+		return dev->dma_dev;
+	return dev->dev;
+}
+
+static inline void drm_dev_set_dma_dev(struct drm_device *dev,
+				       struct device *dma_dev)
+{
+	dev->dma_dev = dma_dev;
+}
 
 #endif
