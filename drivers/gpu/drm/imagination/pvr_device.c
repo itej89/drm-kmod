@@ -432,6 +432,15 @@ pvr_device_gpu_init(struct pvr_device *pvr_dev)
 	else
 		return -EINVAL;
 
+	dev_info(from_pvr_device(pvr_dev)->dev,
+	    "FW processor type: %s (%u) [meta=%d mips=%d riscv=%d]\n",
+	    pvr_dev->fw_dev.processor_type == PVR_FW_PROCESSOR_TYPE_META ? "META" :
+	    pvr_dev->fw_dev.processor_type == PVR_FW_PROCESSOR_TYPE_MIPS ? "MIPS" :
+	    "RISCV", pvr_dev->fw_dev.processor_type,
+	    PVR_HAS_FEATURE(pvr_dev, meta),
+	    PVR_HAS_FEATURE(pvr_dev, mips),
+	    PVR_HAS_FEATURE(pvr_dev, riscv_fw_processor));
+
 	pvr_stream_create_musthave_masks(pvr_dev);
 
 	dev_info(from_pvr_device(pvr_dev)->dev, "pvr_device_gpu_init: set_dma_info\n");
