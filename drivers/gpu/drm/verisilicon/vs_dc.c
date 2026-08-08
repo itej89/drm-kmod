@@ -24,6 +24,7 @@ static const struct regmap_config vs_dc_regmap_cfg = {
 
 static const struct of_device_id vs_dc_driver_dt_match[] = {
 	{ .compatible = "verisilicon,dc" },
+	{ .compatible = "verisilicon,dc8200" },
 	{},
 };
 /* MODULE_DEVICE_TABLE(of, vs_dc_driver_dt_match); */
