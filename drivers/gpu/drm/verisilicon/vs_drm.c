@@ -89,6 +89,7 @@ int vs_drm_initialize(struct vs_dc *dc, struct platform_device *pdev)
 	unsigned int i;
 	int ret;
 
+	dev_info(dev, "vs_drm_init: alloc\n");
 	vdrm = devm_drm_dev_alloc(dev, &vs_drm_driver, struct vs_drm_dev, base);
 	if (IS_ERR(vdrm))
 		return PTR_ERR(vdrm);
@@ -97,27 +98,36 @@ int vs_drm_initialize(struct vs_dc *dc, struct platform_device *pdev)
 	vdrm->dc = dc;
 	dc->drm_dev = vdrm;
 
+	dev_info(dev, "vs_drm_init: mode_config\n");
 	ret = drmm_mode_config_init(drm);
 	if (ret)
 		return ret;
 
+	dev_info(dev, "vs_drm_init: aperture\n");
 	/* Remove early framebuffers (ie. simple-framebuffer) */
 	ret = aperture_remove_all_conflicting_devices(DRIVER_NAME);
 	if (ret)
 		return ret;
 
+	dev_info(dev, "vs_drm_init: crtc loop (%u displays)\n",
+		 dc->identity.display_count);
 	for (i = 0; i < dc->identity.display_count; i++) {
 		crtc = vs_crtc_init(drm, dc, i);
-		if (IS_ERR(crtc))
+		if (IS_ERR(crtc)) {
+			dev_err(dev, "vs_drm_init: crtc_init[%u] failed %ld\n", i, PTR_ERR(crtc));
 			return PTR_ERR(crtc);
+		}
 
 		bridge = vs_bridge_init(drm, crtc);
-		if (IS_ERR(bridge))
+		if (IS_ERR(bridge)) {
+			dev_err(dev, "vs_drm_init: bridge_init[%u] failed %ld\n", i, PTR_ERR(bridge));
 			return PTR_ERR(bridge);
+		}
 
 		vdrm->crtcs[i] = crtc;
 	}
 
+	dev_info(dev, "vs_drm_init: vblank\n");
 	ret = drm_vblank_init(drm, dc->identity.display_count);
 	if (ret)
 		return ret;
