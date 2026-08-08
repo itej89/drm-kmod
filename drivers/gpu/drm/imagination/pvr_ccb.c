@@ -333,6 +333,11 @@ pvr_kccb_send_cmd_reserved_powered(struct pvr_device *pvr_dev,
 #endif
 	pvr_dev->kccb.reserved_count--;
 
+	{
+		extern void pvr_fw_program_heap_bases(struct pvr_device *);
+		pvr_fw_program_heap_bases(pvr_dev);
+	}
+
 	/* Kick MTS */
 	pvr_fw_mts_schedule(pvr_dev,
 			    PVR_FWIF_DM_GP & ~ROGUE_CR_MTS_SCHEDULE_DM_CLRMSK);
