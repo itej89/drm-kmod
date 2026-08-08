@@ -424,6 +424,8 @@ fw_sysdata_init(void *cpu_ptr, void *priv)
 	if (slc_size_in_kilobytes < ROGUE_FWIF_SLC_MIN_SIZE_FOR_DM_OVERLAP_KB)
 		config_flags |= ROGUE_FWIF_INICFG_DISABLE_DM_OVERLAP;
 
+	config_flags |= ROGUE_FWIF_INICFG_POW_RASCALDUST;
+
 	fwif_sysdata->config_flags = config_flags;
 }
 
