@@ -927,15 +927,6 @@ pvr_queue_signal_done_fences(struct pvr_queue *queue)
 			break;
 
 		if (!dma_fence_is_signaled(job->done_fence)) {
-#ifdef __FreeBSD__
-			{
-				extern void sifive_ccache_flush_all(void);
-				mb();
-				sifive_ccache_flush_all();
-				mb();
-				sifive_ccache_flush_all();
-			}
-#endif
 			dma_fence_signal(job->done_fence);
 			pvr_job_release_pm_ref(job);
 			atomic_dec(&queue->in_flight_job_count);
