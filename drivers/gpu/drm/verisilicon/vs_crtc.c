@@ -90,7 +90,11 @@ static void vs_crtc_mode_set_nofb(struct drm_crtc *crtc)
 		regmap_set_bits(dc->regs, VSDC_DISP_VSYNC(output),
 				VSDC_DISP_VSYNC_POL);
 
+#ifdef __FreeBSD__
+	printf("vs_crtc_mode_set_nofb: skipping clk_set_rate (HDMI PHY generates pixel clock)\n");
+#else
 	WARN_ON(clk_set_rate(dc->pix_clk[output], mode->crtc_clock * 1000));
+#endif
 }
 
 static enum drm_mode_status
