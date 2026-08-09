@@ -89,55 +89,53 @@ static int vs_dc_probe(struct platform_device *pdev)
 	}
 
 #ifdef __FreeBSD__
-#define HDMI_REG_TEST(label) do { \
-	void __iomem *_ht = ioremap(0x29590000, 0x10); \
-	if (_ht) { \
-		dev_info(dev, "HDMI_TEST %s: reg=0x%x\n", label, readl(_ht)); \
-		iounmap(_ht); \
-	} \
-} while(0)
-	HDMI_REG_TEST("before_any_clk");
-#endif
-	dc->noc_disp = devm_clk_get_enabled(dev, "noc_disp");
+	/*
+	 * System-level VOUT clocks are already enabled by U-Boot.
+	 * Re-enabling them through the clock framework glitches the
+	 * VOUT domain and kills HDMI register access. Get references
+	 * only, don't enable.
+	 */
+	dc->noc_disp = devm_clk_get(dev, "noc_disp");
 	if (IS_ERR(dc->noc_disp)) {
 		dev_err(dev, "can't get noc_disp clock\n");
 		return PTR_ERR(dc->noc_disp);
 	}
-#ifdef __FreeBSD__
-	HDMI_REG_TEST("after_noc_disp");
-#endif
-
 	dc->vout_src = devm_clk_get(dev, "vout_src");
 	if (IS_ERR(dc->vout_src)) {
 		dev_err(dev, "can't get vout_src clock\n");
 		return PTR_ERR(dc->vout_src);
 	}
-#ifdef __FreeBSD__
-	dev_info(dev, "vout_src: skipping enable (already on from U-Boot)\n");
-	HDMI_REG_TEST("after_vout_src_skip");
-#else
-	{
-		int rc = clk_prepare_enable(dc->vout_src);
-		dev_info(dev, "vout_src enable ret=%d\n", rc);
+	dc->top_vout_axi = devm_clk_get(dev, "top_vout_axi");
+	if (IS_ERR(dc->top_vout_axi)) {
+		dev_err(dev, "can't get top_vout_axi clock\n");
+		return PTR_ERR(dc->top_vout_axi);
 	}
-#endif
-
+	dc->top_vout_ahb = devm_clk_get(dev, "top_vout_ahb");
+	if (IS_ERR(dc->top_vout_ahb)) {
+		dev_err(dev, "can't get top_vout_ahb clock\n");
+		return PTR_ERR(dc->top_vout_ahb);
+	}
+#else
+	dc->noc_disp = devm_clk_get_enabled(dev, "noc_disp");
+	if (IS_ERR(dc->noc_disp)) {
+		dev_err(dev, "can't get noc_disp clock\n");
+		return PTR_ERR(dc->noc_disp);
+	}
+	dc->vout_src = devm_clk_get_enabled(dev, "vout_src");
+	if (IS_ERR(dc->vout_src)) {
+		dev_err(dev, "can't get vout_src clock\n");
+		return PTR_ERR(dc->vout_src);
+	}
 	dc->top_vout_axi = devm_clk_get_enabled(dev, "top_vout_axi");
 	if (IS_ERR(dc->top_vout_axi)) {
 		dev_err(dev, "can't get top_vout_axi clock\n");
 		return PTR_ERR(dc->top_vout_axi);
 	}
-#ifdef __FreeBSD__
-	HDMI_REG_TEST("after_top_vout_axi");
-#endif
-
 	dc->top_vout_ahb = devm_clk_get_enabled(dev, "top_vout_ahb");
 	if (IS_ERR(dc->top_vout_ahb)) {
 		dev_err(dev, "can't get top_vout_ahb clock\n");
 		return PTR_ERR(dc->top_vout_ahb);
 	}
-#ifdef __FreeBSD__
-	HDMI_REG_TEST("after_top_vout_ahb");
 #endif
 
 	dc->core_clk = devm_clk_get_enabled(dev, "core");
@@ -145,27 +143,18 @@ static int vs_dc_probe(struct platform_device *pdev)
 		dev_err(dev, "can't get core clock\n");
 		return PTR_ERR(dc->core_clk);
 	}
-#ifdef __FreeBSD__
-	HDMI_REG_TEST("after_core");
-#endif
 
 	dc->axi_clk = devm_clk_get_enabled(dev, "axi");
 	if (IS_ERR(dc->axi_clk)) {
 		dev_err(dev, "can't get axi clock\n");
 		return PTR_ERR(dc->axi_clk);
 	}
-#ifdef __FreeBSD__
-	HDMI_REG_TEST("after_axi");
-#endif
 
 	dc->ahb_clk = devm_clk_get_enabled(dev, "ahb");
 	if (IS_ERR(dc->ahb_clk)) {
 		dev_err(dev, "can't get ahb clock\n");
 		return PTR_ERR(dc->ahb_clk);
 	}
-#ifdef __FreeBSD__
-	HDMI_REG_TEST("after_ahb");
-#endif
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
@@ -178,9 +167,6 @@ static int vs_dc_probe(struct platform_device *pdev)
 		dev_err(dev, "can't deassert reset lines\n");
 		return ret;
 	}
-#ifdef __FreeBSD__
-	HDMI_REG_TEST("after_reset_deassert");
-#endif
 
 	regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(regs)) {
