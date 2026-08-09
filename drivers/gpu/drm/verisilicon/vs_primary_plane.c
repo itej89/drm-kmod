@@ -9,8 +9,10 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_fourcc.h>
+#include <drm/drm_fb_dma_helper.h>
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_gem_atomic_helper.h>
+#include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_modeset_helper_vtables.h>
 #include <drm/drm_plane.h>
 #include <drm/drm_print.h>
@@ -129,16 +131,39 @@ static void vs_primary_plane_atomic_update(struct drm_plane *plane,
 
 	dma_addr = vs_fb_get_dma_addr(fb, &state->src);
 
+#ifdef __FreeBSD__
+	{
+		struct drm_gem_dma_object *gem = drm_fb_dma_get_gem_obj(fb, 0);
+
+		printf("vs_primary_plane: output=%u dma=0x%lx vaddr=%p fmt=%u pitch=%u %ux%u\n",
+		       output, (unsigned long)dma_addr, gem ? gem->vaddr : NULL,
+		       vs_state->format.color, fb->pitches[0],
+		       state->crtc_w, state->crtc_h);
+
+		/*
+		 * TEST: Fill framebuffer through kernel uncached vaddr.
+		 * This bypasses the userspace cached mmap entirely.
+		 * If this produces visible colors, the cache is the problem.
+		 */
+		if (gem && gem->vaddr) {
+			uint32_t *p = (uint32_t *)gem->vaddr;
+			unsigned long npix = (unsigned long)fb->pitches[0] *
+			    state->crtc_h / 4;
+			unsigned long half = npix / 2;
+			unsigned long i;
+
+			for (i = 0; i < half; i++)
+				p[i] = 0x000000FF; /* blue */
+			for (i = half; i < npix; i++)
+				p[i] = 0x00FF0000; /* red */
+			printf("vs_primary_plane: KERNEL FILL done (%lu pixels via vaddr %p)\n",
+			       npix, gem->vaddr);
+		}
+	}
+#else
 	printf("vs_primary_plane: output=%u dma_addr=0x%lx fmt=%u pitch=%u %ux%u\n",
 	       output, (unsigned long)dma_addr, vs_state->format.color,
 	       fb->pitches[0], state->crtc_w, state->crtc_h);
-
-#ifdef __FreeBSD__
-	{
-		extern void sifive_ccache_flush_range(uint64_t, unsigned long);
-		sifive_ccache_flush_range(dma_addr,
-		    (unsigned long)fb->pitches[0] * state->crtc_h);
-	}
 #endif
 
 	regmap_write(dc->regs, VSDC_FB_ADDRESS(output),
