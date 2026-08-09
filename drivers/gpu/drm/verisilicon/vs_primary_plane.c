@@ -69,11 +69,14 @@ static void vs_primary_plane_atomic_enable(struct drm_plane *plane,
 	unsigned int output = vcrtc->id;
 	struct vs_dc *dc = vcrtc->dc;
 
-	regmap_set_bits(dc->regs, VSDC_FB_CONFIG_EX(output),
-			VSDC_FB_CONFIG_EX_FB_EN);
-	regmap_update_bits(dc->regs, VSDC_FB_CONFIG_EX(output),
-			   VSDC_FB_CONFIG_EX_DISPLAY_ID_MASK,
-			   VSDC_FB_CONFIG_EX_DISPLAY_ID(output));
+	/*
+	 * Enable plane: set FB_EN, display_id, zpos=0.
+	 * Clear CSC bits (degamma=bit5, RGB2RGB=bit6, YUV2RGB=bit8).
+	 * Matches old jh7110_display.c CONFIG_EX setup.
+	 */
+	regmap_write(dc->regs, VSDC_FB_CONFIG_EX(output),
+		     VSDC_FB_CONFIG_EX_FB_EN |
+		     VSDC_FB_CONFIG_EX_DISPLAY_ID(output));
 
 	vs_primary_plane_commit(dc, output);
 }
@@ -116,21 +119,19 @@ static void vs_primary_plane_atomic_update(struct drm_plane *plane,
 	output = vcrtc->id;
 	dc = vcrtc->dc;
 
-	regmap_update_bits(dc->regs, VSDC_FB_CONFIG(output),
-			   VSDC_FB_CONFIG_FMT_MASK,
-			   VSDC_FB_CONFIG_FMT(vs_state->format.color));
-	regmap_update_bits(dc->regs, VSDC_FB_CONFIG(output),
-			   VSDC_FB_CONFIG_SWIZZLE_MASK,
-			   VSDC_FB_CONFIG_SWIZZLE(vs_state->format.swizzle));
-	regmap_assign_bits(dc->regs, VSDC_FB_CONFIG(output),
-			   VSDC_FB_CONFIG_UV_SWIZZLE_EN,
-			   vs_state->format.uv_swizzle);
+	/*
+	 * Set format + clear stale bits (scale, tile, rotate, clear).
+	 * Matches old jh7110_display.c which wrote the full register.
+	 */
+	regmap_write(dc->regs, VSDC_FB_CONFIG(output),
+		     VSDC_FB_CONFIG_FMT(vs_state->format.color) |
+		     VSDC_FB_CONFIG_SWIZZLE(vs_state->format.swizzle));
 
 	dma_addr = vs_fb_get_dma_addr(fb, &state->src);
 
-	printf("vs_primary_plane: output=%u dma_addr=0x%lx pitch=%u %ux%u\n",
-	       output, (unsigned long)dma_addr, fb->pitches[0],
-	       state->crtc_w, state->crtc_h);
+	printf("vs_primary_plane: output=%u dma_addr=0x%lx fmt=%u pitch=%u %ux%u\n",
+	       output, (unsigned long)dma_addr, vs_state->format.color,
+	       fb->pitches[0], state->crtc_w, state->crtc_h);
 
 #ifdef __FreeBSD__
 	{
@@ -144,6 +145,11 @@ static void vs_primary_plane_atomic_update(struct drm_plane *plane,
 		     lower_32_bits(dma_addr));
 	regmap_write(dc->regs, VSDC_FB_STRIDE(output),
 		     fb->pitches[0]);
+	/* Zero YUV plane addresses */
+	regmap_write(dc->regs, 0x1530, 0);
+	regmap_write(dc->regs, 0x1538, 0);
+	regmap_write(dc->regs, 0x1800, 0);
+	regmap_write(dc->regs, 0x1808, 0);
 
 	regmap_write(dc->regs, VSDC_FB_TOP_LEFT(output),
 		     VSDC_MAKE_PLANE_POS(state->crtc_x, state->crtc_y));
@@ -153,8 +159,12 @@ static void vs_primary_plane_atomic_update(struct drm_plane *plane,
 	regmap_write(dc->regs, VSDC_FB_SIZE(output),
 		     VSDC_MAKE_PLANE_SIZE(state->crtc_w, state->crtc_h));
 
-	regmap_write(dc->regs, VSDC_FB_BLEND_CONFIG(output),
-		     VSDC_FB_BLEND_CONFIG_BLEND_DISABLE);
+	/* Blend: BLEND_PIXEL_NONE + full alpha (matching old driver) */
+	regmap_write(dc->regs, VSDC_FB_BLEND_CONFIG(output), 0x3548);
+	regmap_write(dc->regs, 0x2500, 0xFF000000);
+	regmap_write(dc->regs, 0x2508, 0xFF000000);
+	regmap_write(dc->regs, 0x1508, 0);
+	regmap_write(dc->regs, 0x1510, 0);
 
 	vs_primary_plane_commit(dc, output);
 }
