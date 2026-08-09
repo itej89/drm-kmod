@@ -122,10 +122,6 @@ struct vs_bridge *vs_bridge_init(struct drm_device *drm_dev,
 	if (crtc->id != 0)
 		return NULL;
 
-	printf("vs_bridge_init: calling jh7110_hdmi_enable to test register access\n");
-	jh7110_hdmi_enable();
-	printf("vs_bridge_init: jh7110_hdmi_enable returned OK\n");
-
 	bridge = drmm_kzalloc(drm_dev, sizeof(*bridge), GFP_KERNEL);
 	if (!bridge)
 		return ERR_PTR(-ENOMEM);
