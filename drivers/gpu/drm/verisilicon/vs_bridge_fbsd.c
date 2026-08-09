@@ -30,10 +30,7 @@ void vs_hdmi_enable(struct vs_crtc *vcrtc)
 	struct vs_dc *dc = vcrtc->dc;
 	unsigned int output = vcrtc->id;
 
-	printf("vs_hdmi_enable: start output=%u\n", output);
-
 	jh7110_hdmi_enable();
-	printf("vs_hdmi_enable: hdmi phy done\n");
 
 	/*
 	 * DC8200 output init — exact sequence from jh7110_display.c.
@@ -87,7 +84,6 @@ void vs_hdmi_enable(struct vs_crtc *vcrtc)
 	/* Commit */
 	regmap_set_bits(dc->regs, VSDC_DISP_PANEL_CONFIG_EX(output),
 			VSDC_DISP_PANEL_CONFIG_EX_COMMIT);
-	printf("vs_hdmi_enable: DC8200 output configured\n");
 }
 
 void vs_hdmi_disable(struct vs_crtc *vcrtc)
