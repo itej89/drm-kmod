@@ -35,27 +35,69 @@ void vs_hdmi_enable(struct vs_crtc *vcrtc)
 	jh7110_hdmi_enable();
 	printf("vs_hdmi_enable: hdmi phy done\n");
 
+	/*
+	 * DC8200 output init — matches jh7110_display.c proven sequence.
+	 * Program all registers that the old framebuffer driver set.
+	 */
+
+	/* Panel config: DE_EN | DAT_EN | CLK_EN */
+	regmap_write(dc->regs, VSDC_DISP_PANEL_CONFIG(output),
+		     VSDC_DISP_PANEL_CONFIG_DE_EN |
+		     VSDC_DISP_PANEL_CONFIG_DAT_EN |
+		     VSDC_DISP_PANEL_CONFIG_CLK_EN);
+
+	/* DPI config: RGB888 */
+	regmap_write(dc->regs, VSDC_DISP_DPI_CONFIG(output),
+		     VSDC_DISP_DPI_CONFIG_FMT_RGB888);
+
+	/* DP config: RGB888 + DP_EN for HDMI */
 	regmap_write(dc->regs, VSDC_DISP_DP_CONFIG(output),
 		     VSDC_DISP_DP_CONFIG_DP_EN |
 		     VSDC_DISP_DP_CONFIG_FMT_RGB888);
-	printf("vs_hdmi_enable: dp_config done\n");
 
+	/* Clear YUV in panel config */
+	regmap_clear_bits(dc->regs, VSDC_DISP_PANEL_CONFIG(output),
+			  VSDC_DISP_PANEL_CONFIG_YUV);
+
+	/* Dither off */
+	regmap_write(dc->regs, 0x1410, 0);
+
+	/* Scale config */
+	regmap_write(dc->regs, 0x1520, 0x33);
+
+	/* Background color black */
+	regmap_write(dc->regs, 0x1528, 0x00000000);
+
+	/* Blend config: BLEND_PIXEL_NONE (from old driver) */
+	regmap_write(dc->regs, 0x2510, 0x3548);
+	regmap_write(dc->regs, 0x2500, 0xFF000000);
+	regmap_write(dc->regs, 0x2508, 0xFF000000);
+
+	/* Color key off */
+	regmap_write(dc->regs, 0x1508, 0);
+	regmap_write(dc->regs, 0x1510, 0);
+
+	/* RGB-to-RGB matrix (BT.709 to BT.2020, from old driver) */
+	regmap_write(dc->regs, 0x1E20, 10279 | (5395 << 16));
+	regmap_write(dc->regs, 0x1E28, 709 | (1132 << 16));
+	regmap_write(dc->regs, 0x1E30, 15065 | (187 << 16));
+	regmap_write(dc->regs, 0x1E38, 269 | (1442 << 16));
+	regmap_write(dc->regs, 0x1E40, 14674);
+
+	/* Panel config: add RUNNING */
 	regmap_set_bits(dc->regs, VSDC_DISP_PANEL_CONFIG(output),
-			VSDC_DISP_PANEL_CONFIG_DE_EN |
-			VSDC_DISP_PANEL_CONFIG_DAT_EN |
-			VSDC_DISP_PANEL_CONFIG_CLK_EN |
 			VSDC_DISP_PANEL_CONFIG_RUNNING);
-	printf("vs_hdmi_enable: panel_config done\n");
 
+	/* Start panel */
 	regmap_clear_bits(dc->regs, VSDC_DISP_PANEL_START,
 			  VSDC_DISP_PANEL_START_MULTI_DISP_SYNC);
 	regmap_set_bits(dc->regs, VSDC_DISP_PANEL_START,
 			VSDC_DISP_PANEL_START_RUNNING(output));
-	printf("vs_hdmi_enable: panel_start done\n");
 
+	/* Commit */
 	regmap_set_bits(dc->regs, VSDC_DISP_PANEL_CONFIG_EX(output),
 			VSDC_DISP_PANEL_CONFIG_EX_COMMIT);
-	printf("vs_hdmi_enable: commit done\n");
+	printf("vs_hdmi_enable: DC8200 output configured\n");
 }
 
 void vs_hdmi_disable(struct vs_crtc *vcrtc)
