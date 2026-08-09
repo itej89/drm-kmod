@@ -128,6 +128,10 @@ static void vs_primary_plane_atomic_update(struct drm_plane *plane,
 
 	dma_addr = vs_fb_get_dma_addr(fb, &state->src);
 
+	printf("vs_primary_plane: output=%u dma_addr=0x%lx pitch=%u %ux%u\n",
+	       output, (unsigned long)dma_addr, fb->pitches[0],
+	       state->crtc_w, state->crtc_h);
+
 	regmap_write(dc->regs, VSDC_FB_ADDRESS(output),
 		     lower_32_bits(dma_addr));
 	regmap_write(dc->regs, VSDC_FB_STRIDE(output),

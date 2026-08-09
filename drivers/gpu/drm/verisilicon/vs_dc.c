@@ -29,12 +29,18 @@ static const struct of_device_id vs_dc_driver_dt_match[] = {
 };
 /* MODULE_DEVICE_TABLE(of, vs_dc_driver_dt_match); */
 
+static int irq_count = 0;
+
 static irqreturn_t vs_dc_irq_handler(int irq, void *private)
 {
 	struct vs_dc *dc = private;
 	u32 irqs;
 
 	regmap_read(dc->regs, VSDC_TOP_IRQ_ACK, &irqs);
+
+	if (irq_count < 5)
+		printf("vs_dc_irq: irqs=0x%x\n", irqs);
+	irq_count++;
 
 	vs_drm_handle_irq(dc, irqs);
 
