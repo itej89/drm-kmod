@@ -113,14 +113,13 @@ static int vs_dc_probe(struct platform_device *pdev)
 		return PTR_ERR(dc->vout_src);
 	}
 #ifdef __FreeBSD__
-	HDMI_REG_TEST("after_vout_src_GET");
-#endif
+	dev_info(dev, "vout_src: skipping enable (already on from U-Boot)\n");
+	HDMI_REG_TEST("after_vout_src_skip");
+#else
 	{
 		int rc = clk_prepare_enable(dc->vout_src);
 		dev_info(dev, "vout_src enable ret=%d\n", rc);
 	}
-#ifdef __FreeBSD__
-	HDMI_REG_TEST("after_vout_src_ENABLE");
 #endif
 
 	dc->top_vout_axi = devm_clk_get_enabled(dev, "top_vout_axi");
