@@ -34,7 +34,9 @@ static void vs_crtc_atomic_disable(struct drm_crtc *crtc,
 
 	drm_crtc_vblank_off(crtc);
 
+#ifndef __FreeBSD__
 	clk_disable_unprepare(dc->pix_clk[output]);
+#endif
 }
 
 static void vs_crtc_atomic_enable(struct drm_crtc *crtc,
@@ -45,8 +47,10 @@ static void vs_crtc_atomic_enable(struct drm_crtc *crtc,
 	unsigned int output = vcrtc->id;
 
 	printf("vs_crtc_enable: start output=%u\n", output);
+#ifndef __FreeBSD__
 	drm_WARN_ON(&dc->drm_dev->base,
 		    clk_prepare_enable(dc->pix_clk[output]));
+#endif
 	printf("vs_crtc_enable: pix_clk done\n");
 
 	drm_crtc_vblank_on(crtc);

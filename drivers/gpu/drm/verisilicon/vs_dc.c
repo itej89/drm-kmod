@@ -138,23 +138,39 @@ static int vs_dc_probe(struct platform_device *pdev)
 	}
 #endif
 
+#ifdef __FreeBSD__
+	dc->core_clk = devm_clk_get(dev, "core");
+	if (IS_ERR(dc->core_clk)) {
+		dev_err(dev, "can't get core clock\n");
+		return PTR_ERR(dc->core_clk);
+	}
+	dc->axi_clk = devm_clk_get(dev, "axi");
+	if (IS_ERR(dc->axi_clk)) {
+		dev_err(dev, "can't get axi clock\n");
+		return PTR_ERR(dc->axi_clk);
+	}
+	dc->ahb_clk = devm_clk_get(dev, "ahb");
+	if (IS_ERR(dc->ahb_clk)) {
+		dev_err(dev, "can't get ahb clock\n");
+		return PTR_ERR(dc->ahb_clk);
+	}
+#else
 	dc->core_clk = devm_clk_get_enabled(dev, "core");
 	if (IS_ERR(dc->core_clk)) {
 		dev_err(dev, "can't get core clock\n");
 		return PTR_ERR(dc->core_clk);
 	}
-
 	dc->axi_clk = devm_clk_get_enabled(dev, "axi");
 	if (IS_ERR(dc->axi_clk)) {
 		dev_err(dev, "can't get axi clock\n");
 		return PTR_ERR(dc->axi_clk);
 	}
-
 	dc->ahb_clk = devm_clk_get_enabled(dev, "ahb");
 	if (IS_ERR(dc->ahb_clk)) {
 		dev_err(dev, "can't get ahb clock\n");
 		return PTR_ERR(dc->ahb_clk);
 	}
+#endif
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
