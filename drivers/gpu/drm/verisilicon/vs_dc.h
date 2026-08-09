@@ -18,13 +18,17 @@
 #include "vs_hwdb.h"
 
 #define VSDC_MAX_OUTPUTS 2
-#define VSDC_RESET_COUNT 3
+#define VSDC_RESET_COUNT 4
 
 struct vs_drm_dev;
 struct vs_crtc;
 
 struct vs_dc {
 	struct regmap *regs;
+	struct clk *noc_disp;
+	struct clk *vout_src;
+	struct clk *top_vout_axi;
+	struct clk *top_vout_ahb;
 	struct clk *core_clk;
 	struct clk *axi_clk;
 	struct clk *ahb_clk;
