@@ -107,13 +107,20 @@ static int vs_dc_probe(struct platform_device *pdev)
 	HDMI_REG_TEST("after_noc_disp");
 #endif
 
-	dc->vout_src = devm_clk_get_enabled(dev, "vout_src");
+	dc->vout_src = devm_clk_get(dev, "vout_src");
 	if (IS_ERR(dc->vout_src)) {
 		dev_err(dev, "can't get vout_src clock\n");
 		return PTR_ERR(dc->vout_src);
 	}
 #ifdef __FreeBSD__
-	HDMI_REG_TEST("after_vout_src");
+	HDMI_REG_TEST("after_vout_src_GET");
+#endif
+	{
+		int rc = clk_prepare_enable(dc->vout_src);
+		dev_info(dev, "vout_src enable ret=%d\n", rc);
+	}
+#ifdef __FreeBSD__
+	HDMI_REG_TEST("after_vout_src_ENABLE");
 #endif
 
 	dc->top_vout_axi = devm_clk_get_enabled(dev, "top_vout_axi");
