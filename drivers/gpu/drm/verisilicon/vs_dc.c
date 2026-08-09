@@ -76,10 +76,9 @@ static int vs_dc_probe(struct platform_device *pdev)
 	if (!dc)
 		return -ENOMEM;
 
-	dc->rsts[0].id = "vout_src";
-	dc->rsts[1].id = "core";
-	dc->rsts[2].id = "axi";
-	dc->rsts[3].id = "ahb";
+	dc->rsts[0].id = "core";
+	dc->rsts[1].id = "axi";
+	dc->rsts[2].id = "ahb";
 
 	ret = devm_reset_control_bulk_get_optional_shared(dev, VSDC_RESET_COUNT,
 							  dc->rsts);
@@ -88,89 +87,23 @@ static int vs_dc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-#ifdef __FreeBSD__
-	/*
-	 * System-level VOUT clocks are already enabled by U-Boot.
-	 * Re-enabling them through the clock framework glitches the
-	 * VOUT domain and kills HDMI register access. Get references
-	 * only, don't enable.
-	 */
-	dc->noc_disp = devm_clk_get(dev, "noc_disp");
-	if (IS_ERR(dc->noc_disp)) {
-		dev_err(dev, "can't get noc_disp clock\n");
-		return PTR_ERR(dc->noc_disp);
-	}
-	dc->vout_src = devm_clk_get(dev, "vout_src");
-	if (IS_ERR(dc->vout_src)) {
-		dev_err(dev, "can't get vout_src clock\n");
-		return PTR_ERR(dc->vout_src);
-	}
-	dc->top_vout_axi = devm_clk_get(dev, "top_vout_axi");
-	if (IS_ERR(dc->top_vout_axi)) {
-		dev_err(dev, "can't get top_vout_axi clock\n");
-		return PTR_ERR(dc->top_vout_axi);
-	}
-	dc->top_vout_ahb = devm_clk_get(dev, "top_vout_ahb");
-	if (IS_ERR(dc->top_vout_ahb)) {
-		dev_err(dev, "can't get top_vout_ahb clock\n");
-		return PTR_ERR(dc->top_vout_ahb);
-	}
-#else
-	dc->noc_disp = devm_clk_get_enabled(dev, "noc_disp");
-	if (IS_ERR(dc->noc_disp)) {
-		dev_err(dev, "can't get noc_disp clock\n");
-		return PTR_ERR(dc->noc_disp);
-	}
-	dc->vout_src = devm_clk_get_enabled(dev, "vout_src");
-	if (IS_ERR(dc->vout_src)) {
-		dev_err(dev, "can't get vout_src clock\n");
-		return PTR_ERR(dc->vout_src);
-	}
-	dc->top_vout_axi = devm_clk_get_enabled(dev, "top_vout_axi");
-	if (IS_ERR(dc->top_vout_axi)) {
-		dev_err(dev, "can't get top_vout_axi clock\n");
-		return PTR_ERR(dc->top_vout_axi);
-	}
-	dc->top_vout_ahb = devm_clk_get_enabled(dev, "top_vout_ahb");
-	if (IS_ERR(dc->top_vout_ahb)) {
-		dev_err(dev, "can't get top_vout_ahb clock\n");
-		return PTR_ERR(dc->top_vout_ahb);
-	}
-#endif
-
-#ifdef __FreeBSD__
-	dc->core_clk = devm_clk_get(dev, "core");
-	if (IS_ERR(dc->core_clk)) {
-		dev_err(dev, "can't get core clock\n");
-		return PTR_ERR(dc->core_clk);
-	}
-	dc->axi_clk = devm_clk_get(dev, "axi");
-	if (IS_ERR(dc->axi_clk)) {
-		dev_err(dev, "can't get axi clock\n");
-		return PTR_ERR(dc->axi_clk);
-	}
-	dc->ahb_clk = devm_clk_get(dev, "ahb");
-	if (IS_ERR(dc->ahb_clk)) {
-		dev_err(dev, "can't get ahb clock\n");
-		return PTR_ERR(dc->ahb_clk);
-	}
-#else
 	dc->core_clk = devm_clk_get_enabled(dev, "core");
 	if (IS_ERR(dc->core_clk)) {
 		dev_err(dev, "can't get core clock\n");
 		return PTR_ERR(dc->core_clk);
 	}
+
 	dc->axi_clk = devm_clk_get_enabled(dev, "axi");
 	if (IS_ERR(dc->axi_clk)) {
 		dev_err(dev, "can't get axi clock\n");
 		return PTR_ERR(dc->axi_clk);
 	}
+
 	dc->ahb_clk = devm_clk_get_enabled(dev, "ahb");
 	if (IS_ERR(dc->ahb_clk)) {
 		dev_err(dev, "can't get ahb clock\n");
 		return PTR_ERR(dc->ahb_clk);
 	}
-#endif
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
