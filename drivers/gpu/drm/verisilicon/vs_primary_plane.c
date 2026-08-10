@@ -172,6 +172,11 @@ static const struct drm_plane_funcs vs_primary_plane_funcs = {
 	.update_plane		= drm_atomic_helper_update_plane,
 };
 
+static const uint64_t vs_primary_plane_modifiers[] = {
+	DRM_FORMAT_MOD_LINEAR,
+	DRM_FORMAT_MOD_INVALID,
+};
+
 struct drm_plane *vs_primary_plane_init(struct drm_device *drm_dev, struct vs_dc *dc)
 {
 	struct drm_plane *plane;
@@ -180,7 +185,7 @@ struct drm_plane *vs_primary_plane_init(struct drm_device *drm_dev, struct vs_dc
 					   &vs_primary_plane_funcs,
 					   dc->identity.formats->array,
 					   dc->identity.formats->num,
-					   NULL,
+					   vs_primary_plane_modifiers,
 					   DRM_PLANE_TYPE_PRIMARY,
 					   NULL);
 
