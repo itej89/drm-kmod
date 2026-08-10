@@ -458,41 +458,85 @@ fw_reg_cfg_init(void *cpu_ptr, void *priv)
 {
 	struct rogue_fwif_reg_cfg *reg_cfg = cpu_ptr;
 	int idx = 0;
+	int pwr_on_count;
 
 	/*
 	 * Tell the firmware to restore PDS_EXEC_BASE and USC_CODE_BASE
-	 * after every DUST power change and power-on event. Without this,
-	 * the RASCALDUST power management zeroes these registers and the
-	 * firmware doesn't restore them, causing transfer/blit jobs to
-	 * fault at raw heap offsets (e.g. 0x2740 instead of 0xDA00002740).
+	 * after every power-on and DUST power change. Without this,
+	 * power management zeroes these registers and the firmware
+	 * doesn't restore them, causing transfer/blit jobs to fault at
+	 * raw heap offsets (e.g. 0x2740 instead of 0xDA00002740).
 	 */
 
-	/* PDS_EXEC_BASE on DUST_CHANGE */
+	/* PWR_ON entries come first in the array */
+
 	reg_cfg->reg_configs[idx].sddr = 0x00610;
 	reg_cfg->reg_configs[idx].mask = ~0ULL;
 	reg_cfg->reg_configs[idx].value = ROGUE_PDSCODEDATA_HEAP_BASE;
 	idx++;
 
-	/* USC_CODE_BASE (transfer) on DUST_CHANGE */
 	reg_cfg->reg_configs[idx].sddr = 0x04008;
 	reg_cfg->reg_configs[idx].mask = ~0ULL;
 	reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
 	idx++;
 
-	/* USC_CODE_BASE (graphics) on DUST_CHANGE */
 	reg_cfg->reg_configs[idx].sddr = 0x04010;
 	reg_cfg->reg_configs[idx].mask = ~0ULL;
 	reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
 	idx++;
 
-	/* USC_CODE_BASE (compute) on DUST_CHANGE */
 	reg_cfg->reg_configs[idx].sddr = 0x04028;
 	reg_cfg->reg_configs[idx].mask = ~0ULL;
 	reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
 	idx++;
 
-	reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_PWR_ON] = 0;
-	reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_DUST_CHANGE] = idx;
+	pwr_on_count = idx;
+	reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_PWR_ON] = pwr_on_count;
+
+	/* DUST_CHANGE entries follow */
+
+	reg_cfg->reg_configs[idx].sddr = 0x00610;
+	reg_cfg->reg_configs[idx].mask = ~0ULL;
+	reg_cfg->reg_configs[idx].value = ROGUE_PDSCODEDATA_HEAP_BASE;
+	idx++;
+
+	reg_cfg->reg_configs[idx].sddr = 0x04008;
+	reg_cfg->reg_configs[idx].mask = ~0ULL;
+	reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
+	idx++;
+
+	reg_cfg->reg_configs[idx].sddr = 0x04010;
+	reg_cfg->reg_configs[idx].mask = ~0ULL;
+	reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
+	idx++;
+
+	reg_cfg->reg_configs[idx].sddr = 0x04028;
+	reg_cfg->reg_configs[idx].mask = ~0ULL;
+	reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
+	idx++;
+
+	reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_DUST_CHANGE] = idx - pwr_on_count;
+
+	/* TLA (transfer) kick — restore before every transfer job */
+	{
+		int tla_start = idx;
+
+		reg_cfg->reg_configs[idx].sddr = 0x00610;
+		reg_cfg->reg_configs[idx].mask = ~0ULL;
+		reg_cfg->reg_configs[idx].value = ROGUE_PDSCODEDATA_HEAP_BASE;
+		idx++;
+
+		reg_cfg->reg_configs[idx].sddr = 0x04008;
+		reg_cfg->reg_configs[idx].mask = ~0ULL;
+		reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
+		idx++;
+
+		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_GEOM] = 0;
+		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_FRAG] = 0;
+		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_CDM] = 0;
+		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_TLA] = idx - tla_start;
+		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_TDM] = 0;
+	}
 }
 
 static void
