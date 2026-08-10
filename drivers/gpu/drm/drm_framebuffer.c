@@ -334,9 +334,17 @@ int drm_mode_addfb2(struct drm_device *dev,
 	if (!drm_core_check_feature(dev, DRIVER_MODESET))
 		return -EOPNOTSUPP;
 
+	printf("ADDFB2: dev=%s fmt=0x%x %ux%u modifier=0x%llx handles=%u,%u,%u,%u flags=0x%x\n",
+	       dev->driver->name, r->pixel_format, r->width, r->height,
+	       (unsigned long long)r->modifier[0],
+	       r->handles[0], r->handles[1], r->handles[2], r->handles[3],
+	       r->flags);
+
 	fb = drm_internal_framebuffer_create(dev, r, file_priv);
-	if (IS_ERR(fb))
+	if (IS_ERR(fb)) {
+		printf("ADDFB2: FAILED %ld\n", PTR_ERR(fb));
 		return PTR_ERR(fb);
+	}
 
 	drm_dbg_kms(dev, "[FB:%d]\n", fb->base.id);
 	r->fb_id = fb->base.id;
