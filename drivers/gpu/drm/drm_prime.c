@@ -692,9 +692,17 @@ struct sg_table *drm_gem_map_dma_buf(struct dma_buf_attachment *attach,
 	if (WARN_ON(!obj->funcs->get_sg_table))
 		return ERR_PTR(-ENOSYS);
 
+	printf("map_dma_buf: calling get_sg_table obj=%p\n", obj);
 	sgt = obj->funcs->get_sg_table(obj);
+	printf("map_dma_buf: sgt=%p err=%ld\n", sgt, IS_ERR(sgt) ? PTR_ERR(sgt) : 0);
 	if (IS_ERR(sgt))
 		return sgt;
+
+	printf("map_dma_buf: sgt->sgl=%p nents=%u attach->dev=%p\n",
+	       sgt->sgl, sgt->nents, attach->dev);
+	if (attach->dev)
+		printf("map_dma_buf: dev->dma_priv=%p\n",
+		       ((struct device *)attach->dev)->dma_priv);
 
 	ret = dma_map_sgtable(attach->dev, sgt, dir,
 			      DMA_ATTR_SKIP_CPU_SYNC);
