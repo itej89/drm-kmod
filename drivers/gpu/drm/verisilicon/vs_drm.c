@@ -55,8 +55,8 @@ static const struct drm_driver vs_drm_driver = {
 	.major	= DRIVER_MAJOR,
 	.minor	= DRIVER_MINOR,
 
-	/* GEM Operations */
-	DRM_GEM_DMA_DRIVER_OPS_WITH_DUMB_CREATE(vs_gem_dumb_create)
+	/* GEM Operations — no prime import (crashes on FreeBSD cross-device) */
+	.dumb_create		= vs_gem_dumb_create,
 };
 
 static const struct drm_mode_config_funcs vs_mode_config_funcs = {
