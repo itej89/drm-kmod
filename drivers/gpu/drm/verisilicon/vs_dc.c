@@ -66,7 +66,7 @@ static int vs_dc_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(36));
 	if (ret) {
 		dev_err(dev, "No suitable DMA available\n");
 		return ret;
