@@ -55,10 +55,6 @@ static int vs_primary_plane_atomic_check(struct drm_plane *plane,
 
 static void vs_primary_plane_commit(struct vs_dc *dc, unsigned int output)
 {
-#ifdef __FreeBSD__
-	extern void sifive_ccache_flush_all(void);
-	sifive_ccache_flush_all();
-#endif
 	regmap_set_bits(dc->regs, VSDC_FB_CONFIG_EX(output),
 			VSDC_FB_CONFIG_EX_COMMIT);
 }
@@ -132,6 +128,14 @@ static void vs_primary_plane_atomic_update(struct drm_plane *plane,
 		     VSDC_FB_CONFIG_SWIZZLE(vs_state->format.swizzle));
 
 	dma_addr = vs_fb_get_dma_addr(fb, &state->src);
+
+#ifdef __FreeBSD__
+	{
+		extern void sifive_ccache_flush_range(uint64_t, unsigned long);
+		sifive_ccache_flush_range(dma_addr,
+		    (unsigned long)fb->pitches[0] * state->crtc_h);
+	}
+#endif
 
 	regmap_write(dc->regs, VSDC_FB_ADDRESS(output),
 		     lower_32_bits(dma_addr));
