@@ -716,8 +716,11 @@ struct sg_table *drm_gem_map_dma_buf(struct dma_buf_attachment *attach,
 		printf("map_dma_buf: all %u pages valid\n", sgt->nents);
 	}
 
+	printf("map_dma_buf: calling dma_map_sgtable nents=%u dir=%d\n",
+	       sgt->nents, dir);
 	ret = dma_map_sgtable(attach->dev, sgt, dir,
 			      DMA_ATTR_SKIP_CPU_SYNC);
+	printf("map_dma_buf: dma_map_sgtable ret=%d\n", ret);
 	if (ret) {
 		sg_free_table(sgt);
 		kfree(sgt);
