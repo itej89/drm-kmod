@@ -48,7 +48,7 @@ static int vs_gem_dumb_create(struct drm_file *file_priv,
 DEFINE_DRM_GEM_FOPS(vs_drm_driver_fops);
 
 static const struct drm_driver vs_drm_driver = {
-	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
+	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC | DRIVER_RENDER,
 	.fops			= &vs_drm_driver_fops,
 	.name	= DRIVER_NAME,
 	.desc	= DRIVER_DESC,
