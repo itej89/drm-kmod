@@ -700,9 +700,21 @@ struct sg_table *drm_gem_map_dma_buf(struct dma_buf_attachment *attach,
 
 	printf("map_dma_buf: sgt->sgl=%p nents=%u attach->dev=%p\n",
 	       sgt->sgl, sgt->nents, attach->dev);
-	if (attach->dev)
-		printf("map_dma_buf: dev->dma_priv=%p\n",
-		       ((struct device *)attach->dev)->dma_priv);
+
+	/* Check for NULL pages in SG table before mapping */
+	{
+		struct scatterlist *_sg;
+		int _i;
+		for_each_sg(sgt->sgl, _sg, sgt->nents, _i) {
+			if (sg_page(_sg) == NULL) {
+				printf("map_dma_buf: NULL page at sg[%d]\n", _i);
+				sg_free_table(sgt);
+				kfree(sgt);
+				return ERR_PTR(-EINVAL);
+			}
+		}
+		printf("map_dma_buf: all %u pages valid\n", sgt->nents);
+	}
 
 	ret = dma_map_sgtable(attach->dev, sgt, dir,
 			      DMA_ATTR_SKIP_CPU_SYNC);
