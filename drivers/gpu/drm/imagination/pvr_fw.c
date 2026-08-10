@@ -1687,6 +1687,19 @@ pvr_fw_program_heap_bases(struct pvr_device *pvr_dev)
 		       (u32)(ROGUE_USCCODE_HEAP_BASE & 0xFFFFFFFFU));
 	pvr_cr_write32(pvr_dev, 0x0402c,
 		       (u32)(ROGUE_USCCODE_HEAP_BASE >> 32));
+
+	/* Readback verify + memory barrier */
+	{
+		u32 val = pvr_cr_read32(pvr_dev, 0x00610);
+		u32 val_hi = pvr_cr_read32(pvr_dev, 0x00614);
+		u64 actual = ((u64)val_hi << 32) | val;
+		if (actual != ROGUE_PDSCODEDATA_HEAP_BASE) {
+			printf("pvr_heap_bases: PDS_EXEC_BASE readback MISMATCH: "
+			       "wrote 0x%llx read 0x%llx\n",
+			       (unsigned long long)ROGUE_PDSCODEDATA_HEAP_BASE,
+			       (unsigned long long)actual);
+		}
+	}
 }
 
 #ifdef __FreeBSD__

@@ -673,6 +673,9 @@ static void pvr_queue_submit_job_to_cccb(struct pvr_job *job)
 	{
 		extern void pvr_fw_program_heap_bases(struct pvr_device *);
 		pvr_fw_program_heap_bases(job->pvr_dev);
+		/* Memory barrier + delay to ensure registers are visible to GPU */
+		wmb();
+		udelay(10);
 	}
 #ifdef __FreeBSD__
 	{
