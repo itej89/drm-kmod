@@ -55,6 +55,10 @@ static int vs_primary_plane_atomic_check(struct drm_plane *plane,
 
 static void vs_primary_plane_commit(struct vs_dc *dc, unsigned int output)
 {
+#ifdef __FreeBSD__
+	extern void sifive_ccache_flush_all(void);
+	sifive_ccache_flush_all();
+#endif
 	regmap_set_bits(dc->regs, VSDC_FB_CONFIG_EX(output),
 			VSDC_FB_CONFIG_EX_COMMIT);
 }
