@@ -986,18 +986,23 @@ struct drm_gem_object *drm_gem_prime_import_dev(struct drm_device *dev,
 	if (!dev->driver->gem_prime_import_sg_table)
 		return ERR_PTR(-EINVAL);
 
+	printf("prime_import_dev: dma_buf=%p attach_dev=%p\n", dma_buf, attach_dev);
 	attach = dma_buf_attach(dma_buf, attach_dev);
+	printf("prime_import_dev: attach=%p err=%ld\n", attach, IS_ERR(attach) ? PTR_ERR(attach) : 0);
 	if (IS_ERR(attach))
 		return ERR_CAST(attach);
 
 	get_dma_buf(dma_buf);
 
+	printf("prime_import_dev: mapping attachment\n");
 	sgt = dma_buf_map_attachment_unlocked(attach, DMA_BIDIRECTIONAL);
+	printf("prime_import_dev: sgt=%p err=%ld\n", sgt, IS_ERR(sgt) ? PTR_ERR(sgt) : 0);
 	if (IS_ERR(sgt)) {
 		ret = PTR_ERR(sgt);
 		goto fail_detach;
 	}
 
+	printf("prime_import_dev: calling import_sg_table\n");
 	obj = dev->driver->gem_prime_import_sg_table(dev, attach, sgt);
 	if (IS_ERR(obj)) {
 		ret = PTR_ERR(obj);

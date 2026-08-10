@@ -473,9 +473,25 @@ drm_gem_dma_prime_import_sg_table(struct drm_device *dev,
 {
 	struct drm_gem_dma_object *dma_obj;
 
-	/* check if the entries in the sg_table are contiguous */
-	if (drm_prime_get_contiguous_size(sgt) < attach->dmabuf->size)
+	printf("prime_import: dev=%p attach=%p sgt=%p\n", dev, attach, sgt);
+	if (!sgt || !sgt->sgl) {
+		printf("prime_import: NULL sgt or sgl\n");
 		return ERR_PTR(-EINVAL);
+	}
+	printf("prime_import: sgt->nents=%u sgl=%p dmabuf_size=%zu\n",
+	       sgt->nents, sgt->sgl, attach->dmabuf->size);
+	printf("prime_import: sg_dma_address=%lx sg_dma_len=%u\n",
+	       (unsigned long)sg_dma_address(sgt->sgl),
+	       sg_dma_len(sgt->sgl));
+
+	/* check if the entries in the sg_table are contiguous */
+	{
+		size_t contig = drm_prime_get_contiguous_size(sgt);
+		printf("prime_import: contiguous=%zu needed=%zu\n",
+		       contig, attach->dmabuf->size);
+		if (contig < attach->dmabuf->size)
+			return ERR_PTR(-EINVAL);
+	}
 
 	/* Create a DMA GEM buffer. */
 	dma_obj = __drm_gem_dma_create(dev, attach->dmabuf->size, true);
@@ -485,8 +501,8 @@ drm_gem_dma_prime_import_sg_table(struct drm_device *dev,
 	dma_obj->dma_addr = sg_dma_address(sgt->sgl);
 	dma_obj->sgt = sgt;
 
-	drm_dbg_prime(dev, "dma_addr = %pad, size = %zu\n", &dma_obj->dma_addr,
-		      attach->dmabuf->size);
+	printf("prime_import: SUCCESS dma_addr=0x%lx size=%zu\n",
+	       (unsigned long)dma_obj->dma_addr, attach->dmabuf->size);
 
 	return &dma_obj->base;
 }
