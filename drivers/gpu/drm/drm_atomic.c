@@ -623,19 +623,17 @@ static int drm_atomic_plane_check(const struct drm_plane_state *old_plane_state,
 
 	/* Check whether this plane is usable on this CRTC */
 	if (!(plane->possible_crtcs & drm_crtc_mask(crtc))) {
-		drm_dbg_atomic(plane->dev,
-			       "Invalid [CRTC:%d:%s] for [PLANE:%d:%s]\n",
-			       crtc->base.id, crtc->name,
-			       plane->base.id, plane->name);
+		printf("ATOMIC: plane[%d] not usable on crtc[%d] possible=0x%x mask=0x%x\n",
+		       plane->base.id, crtc->base.id,
+		       plane->possible_crtcs, drm_crtc_mask(crtc));
 		return -EINVAL;
 	}
 
 	/* Check whether this plane supports the fb pixel format. */
 	if (!drm_plane_has_format(plane, fb->format->format, fb->modifier)) {
-		drm_dbg_atomic(plane->dev,
-			       "[PLANE:%d:%s] invalid pixel format %p4cc, modifier 0x%llx\n",
-			       plane->base.id, plane->name,
-			       &fb->format->format, fb->modifier);
+		printf("ATOMIC: plane[%d] format 0x%x modifier 0x%llx NOT SUPPORTED\n",
+		       plane->base.id, fb->format->format,
+		       (unsigned long long)fb->modifier);
 		return -EINVAL;
 	}
 
@@ -1413,8 +1411,8 @@ int drm_atomic_check_only(struct drm_atomic_state *state)
 	for_each_oldnew_plane_in_state(state, plane, old_plane_state, new_plane_state, i) {
 		ret = drm_atomic_plane_check(old_plane_state, new_plane_state);
 		if (ret) {
-			drm_dbg_atomic(dev, "[PLANE:%d:%s] atomic core check failed\n",
-				       plane->base.id, plane->name);
+			printf("ATOMIC: plane[%d:%s] core check FAILED %d\n",
+			       plane->base.id, plane->name, ret);
 			return ret;
 		}
 	}
@@ -1422,8 +1420,8 @@ int drm_atomic_check_only(struct drm_atomic_state *state)
 	for_each_oldnew_crtc_in_state(state, crtc, old_crtc_state, new_crtc_state, i) {
 		ret = drm_atomic_crtc_check(old_crtc_state, new_crtc_state);
 		if (ret) {
-			drm_dbg_atomic(dev, "[CRTC:%d:%s] atomic core check failed\n",
-				       crtc->base.id, crtc->name);
+			printf("ATOMIC: crtc[%d:%s] core check FAILED %d\n",
+			       crtc->base.id, crtc->name, ret);
 			return ret;
 		}
 	}
@@ -1431,8 +1429,8 @@ int drm_atomic_check_only(struct drm_atomic_state *state)
 	for_each_new_connector_in_state(state, conn, conn_state, i) {
 		ret = drm_atomic_connector_check(conn, conn_state);
 		if (ret) {
-			drm_dbg_atomic(dev, "[CONNECTOR:%d:%s] atomic core check failed\n",
-				       conn->base.id, conn->name);
+			printf("ATOMIC: connector[%d:%s] core check FAILED %d\n",
+			       conn->base.id, conn->name, ret);
 			return ret;
 		}
 	}
@@ -1441,8 +1439,7 @@ int drm_atomic_check_only(struct drm_atomic_state *state)
 		ret = config->funcs->atomic_check(state->dev, state);
 
 		if (ret) {
-			drm_dbg_atomic(dev, "atomic driver check for %p failed: %d\n",
-				       state, ret);
+			printf("ATOMIC: driver atomic_check FAILED %d\n", ret);
 			return ret;
 		}
 	}
