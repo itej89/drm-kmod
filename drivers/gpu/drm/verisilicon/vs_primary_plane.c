@@ -196,7 +196,7 @@ struct drm_plane *vs_primary_plane_init(struct drm_device *drm_dev, struct vs_dc
 					   &vs_primary_plane_funcs,
 					   dc->identity.formats->array,
 					   dc->identity.formats->num,
-					   vs_primary_plane_modifiers,
+					   NULL,
 					   DRM_PLANE_TYPE_PRIMARY,
 					   NULL);
 
