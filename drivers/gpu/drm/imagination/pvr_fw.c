@@ -517,7 +517,34 @@ fw_reg_cfg_init(void *cpu_ptr, void *priv)
 
 	reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_DUST_CHANGE] = idx - pwr_on_count;
 
-	/* TLA (transfer) kick — restore before every transfer job */
+	reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_GEOM] = 0;
+
+	/*
+	 * Fragment DM kicks — TQ_3D (transfer-frag) jobs run on dm=3
+	 * (PVR_FWIF_DM_FRAG). Without these entries the firmware does
+	 * not restore PDS_EXEC_BASE / USC_CODE_BASE before transfer
+	 * blits that share the fragment pipeline, causing page faults
+	 * at raw heap offsets (e.g. 0x2000 instead of 0xDA00002000).
+	 */
+	{
+		int frag_start = idx;
+
+		reg_cfg->reg_configs[idx].sddr = 0x00610;
+		reg_cfg->reg_configs[idx].mask = ~0ULL;
+		reg_cfg->reg_configs[idx].value = ROGUE_PDSCODEDATA_HEAP_BASE;
+		idx++;
+
+		reg_cfg->reg_configs[idx].sddr = 0x04008;
+		reg_cfg->reg_configs[idx].mask = ~0ULL;
+		reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
+		idx++;
+
+		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_FRAG] = idx - frag_start;
+	}
+
+	reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_CDM] = 0;
+
+	/* TLA (transfer) kick — restore before every TLA DM job */
 	{
 		int tla_start = idx;
 
@@ -531,9 +558,6 @@ fw_reg_cfg_init(void *cpu_ptr, void *priv)
 		reg_cfg->reg_configs[idx].value = ROGUE_USCCODE_HEAP_BASE;
 		idx++;
 
-		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_GEOM] = 0;
-		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_FRAG] = 0;
-		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_CDM] = 0;
 		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_TLA] = idx - tla_start;
 		reg_cfg->num_regs_type[ROGUE_FWIF_REG_CFG_TYPE_TDM] = 0;
 	}
