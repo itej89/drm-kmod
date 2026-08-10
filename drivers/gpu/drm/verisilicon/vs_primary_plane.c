@@ -39,16 +39,27 @@ static int vs_primary_plane_atomic_check(struct drm_plane *plane,
 						  DRM_PLANE_NO_SCALING,
 						  DRM_PLANE_NO_SCALING,
 						  false, true);
-	if (ret)
+	if (ret) {
+		printf("vs_plane_check: helper_check failed %d\n", ret);
 		return ret;
+	}
 
 	if (!new_plane_state->visible)
 		return 0;
 
+	if (fb) {
+		printf("vs_plane_check: fb format=0x%x modifier=0x%llx w=%u h=%u\n",
+		       fb->format->format, (unsigned long long)fb->modifier,
+		       fb->width, fb->height);
+	}
+
 	ret = drm_format_to_vs_format(fb->format->format,
 				      &new_vs_plane_state->format);
-	if (drm_WARN_ON_ONCE(plane->dev, ret))
+	if (ret) {
+		printf("vs_plane_check: format 0x%x not supported\n",
+		       fb->format->format);
 		return ret;
+	}
 
 	return 0;
 }
