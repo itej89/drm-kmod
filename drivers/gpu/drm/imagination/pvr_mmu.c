@@ -2587,6 +2587,29 @@ int pvr_mmu_map(struct pvr_mmu_op_context *op_ctx, u64 size, u64 flags,
 	unsigned int count;
 	int err;
 
+	/* Log heap mappings to debug GPU page faults */
+	{
+		const char *heap_name = NULL;
+		u64 heap_base = 0;
+		if (device_addr >= 0xDA00000000ull &&
+		    device_addr < 0xDE00000000ull)
+			heap_name = "PDS", heap_base = 0xDA00000000ull;
+		else if (device_addr >= 0xE000000000ull &&
+			 device_addr < 0xE200000000ull)
+			heap_name = "USC", heap_base = 0xE000000000ull;
+		else if (device_addr >= 0xE400000000ull &&
+			 device_addr < 0xE600000000ull)
+			heap_name = "XFER", heap_base = 0xE400000000ull;
+		else if (device_addr >= 0x0800000000ull &&
+			 device_addr < 0x8800000000ull)
+			heap_name = "GEN", heap_base = 0x0800000000ull;
+		if (heap_name)
+			drm_info(from_pvr_device(op_ctx->mmu_ctx->pvr_dev),
+				 "pvr_mmu_map: %s heap VA=0x%llx size=0x%llx off=0x%llx\n",
+				 heap_name, device_addr, size,
+				 device_addr - heap_base);
+	}
+
 	if (!size)
 		return 0;
 
