@@ -681,6 +681,53 @@ static void pvr_queue_submit_job_to_cccb(struct pvr_job *job)
 	}
 #endif
 
+	if (job->fw_ccb_cmd_type == ROGUE_FWIF_CCB_CMD_TYPE_TQ_3D) {
+		struct rogue_fwif_cmd_transfer *tcmd = job->cmd;
+		struct rogue_fwif_transfer_regs *r = &tcmd->regs;
+		static int tq_dump_count;
+
+		if (tq_dump_count < 3) {
+			tq_dump_count++;
+			drm_info(from_pvr_device(job->pvr_dev),
+				"TQ_3D[%d] flags=0x%x isp_bgobjvals=0x%x\n",
+				tq_dump_count, tcmd->flags, r->isp_bgobjvals);
+			drm_info(from_pvr_device(job->pvr_dev),
+				"  usc_pixel_output_ctrl=0x%x isp_mtile_size=0x%x isp_render_origin=0x%x isp_ctl=0x%x\n",
+				r->usc_pixel_output_ctrl, r->isp_mtile_size,
+				r->isp_render_origin, r->isp_ctl);
+			drm_info(from_pvr_device(job->pvr_dev),
+				"  isp_aa=0x%x isp_render=0x%x isp_rgn=0x%x\n",
+				r->isp_aa, r->isp_render, r->isp_rgn);
+			drm_info(from_pvr_device(job->pvr_dev),
+				"  event_pixel_pds_info=0x%x event_pixel_pds_code=0x%x event_pixel_pds_data=0x%x\n",
+				r->event_pixel_pds_info, r->event_pixel_pds_code,
+				r->event_pixel_pds_data);
+			drm_info(from_pvr_device(job->pvr_dev),
+				"  pds_bgnd0_base=0x%llx pds_bgnd1_base=0x%llx pds_bgnd3_sizeinfo=0x%llx\n",
+				(unsigned long long)r->pds_bgnd0_base,
+				(unsigned long long)r->pds_bgnd1_base,
+				(unsigned long long)r->pds_bgnd3_sizeinfo);
+			drm_info(from_pvr_device(job->pvr_dev),
+				"  isp_mtile_base=0x%llx\n",
+				(unsigned long long)r->isp_mtile_base);
+			drm_info(from_pvr_device(job->pvr_dev),
+				"  pbe[0]=0x%llx pbe[1]=0x%llx pbe[2]=0x%llx\n",
+				(unsigned long long)r->pbe_wordx_mrty[0],
+				(unsigned long long)r->pbe_wordx_mrty[1],
+				(unsigned long long)r->pbe_wordx_mrty[2]);
+			drm_info(from_pvr_device(job->pvr_dev),
+				"  pbe[3]=0x%llx pbe[4]=0x%llx pbe[5]=0x%llx\n",
+				(unsigned long long)r->pbe_wordx_mrty[3],
+				(unsigned long long)r->pbe_wordx_mrty[4],
+				(unsigned long long)r->pbe_wordx_mrty[5]);
+			drm_info(from_pvr_device(job->pvr_dev),
+				"  pbe[6]=0x%llx pbe[7]=0x%llx pbe[8]=0x%llx\n",
+				(unsigned long long)r->pbe_wordx_mrty[6],
+				(unsigned long long)r->pbe_wordx_mrty[7],
+				(unsigned long long)r->pbe_wordx_mrty[8]);
+		}
+	}
+
 	/* Submit job to FW */
 	pvr_cccb_write_command_with_header(cccb, job->fw_ccb_cmd_type, job->cmd_len, job->cmd,
 					   job->id, job->id);
