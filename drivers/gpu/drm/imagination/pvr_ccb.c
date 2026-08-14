@@ -155,6 +155,10 @@ process_fwccb_command(struct pvr_device *pvr_dev, struct rogue_fwif_fwccb_cmd *c
 	case ROGUE_FWIF_FWCCB_CMD_CONTEXT_RESET_NOTIFICATION: {
 		struct rogue_fwif_fwccb_cmd_context_reset_data *data =
 			&cmd->cmd_data.cmd_context_reset_notification;
+		u32 pds_lo = pvr_cr_read32(pvr_dev, 0x00610);
+		u32 pds_hi = pvr_cr_read32(pvr_dev, 0x00614);
+		u32 usc_lo = pvr_cr_read32(pvr_dev, 0x04008);
+		u32 usc_hi = pvr_cr_read32(pvr_dev, 0x0400c);
 		drm_err(from_pvr_device(pvr_dev),
 			"FW context reset: reason=%u dm=%u ctx_id=%u job_ref=%u "
 			"flags=0x%x pc_addr=0x%llx fault_addr=0x%llx\n",
@@ -163,6 +167,10 @@ process_fwccb_command(struct pvr_device *pvr_dev, struct rogue_fwif_fwccb_cmd *c
 			data->flags,
 			(unsigned long long)data->pc_address,
 			(unsigned long long)data->fault_address);
+		drm_err(from_pvr_device(pvr_dev),
+			"  PDS_EXEC_BASE=0x%llx USC_CODE_BASE=0x%llx\n",
+			(unsigned long long)((u64)pds_hi << 32 | pds_lo),
+			(unsigned long long)((u64)usc_hi << 32 | usc_lo));
 		break;
 	}
 
