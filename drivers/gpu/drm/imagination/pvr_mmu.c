@@ -365,6 +365,14 @@ pvr_mmu_backing_page_sync(struct pvr_mmu_backing_page *page, u32 flags)
 	dma_sync_single_for_device(dev, page->dma_addr,
 				   PVR_MMU_BACKING_PAGE_SIZE, DMA_TO_DEVICE);
 
+#ifdef __FreeBSD__
+	{
+		extern void sifive_ccache_flush_range(uint64_t, unsigned long);
+		sifive_ccache_flush_range(page->dma_addr,
+					 PVR_MMU_BACKING_PAGE_SIZE);
+	}
+#endif
+
 	pvr_mmu_set_flush_flags(pvr_dev, flags);
 }
 
