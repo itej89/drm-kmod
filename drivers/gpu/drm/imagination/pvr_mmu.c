@@ -2605,9 +2605,10 @@ int pvr_mmu_map(struct pvr_mmu_op_context *op_ctx, u64 size, u64 flags,
 			heap_name = "GEN", heap_base = 0x0800000000ull;
 		if (heap_name)
 			drm_info(from_pvr_device(op_ctx->mmu_ctx->pvr_dev),
-				 "pvr_mmu_map: %s heap VA=0x%llx size=0x%llx off=0x%llx\n",
-				 heap_name, device_addr, size,
-				 device_addr - heap_base);
+				 "pvr_mmu_map: %s heap VA=0x%lx size=0x%lx off=0x%lx\n",
+				 heap_name, (unsigned long)device_addr,
+				 (unsigned long)size,
+				 (unsigned long)(device_addr - heap_base));
 	}
 
 	if (!size)
