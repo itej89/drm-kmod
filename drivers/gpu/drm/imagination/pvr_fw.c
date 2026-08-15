@@ -1178,6 +1178,8 @@ pvr_fw_init(struct pvr_device *pvr_dev)
 		    "Two-stage RASCALDUST complete, FW running without RASCALDUST\n");
 	}
 
+	pvr_fw_program_heap_bases(pvr_dev);
+
 	return 0;
 
 err_fw_stop:
