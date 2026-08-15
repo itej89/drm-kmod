@@ -1178,7 +1178,10 @@ pvr_fw_init(struct pvr_device *pvr_dev)
 		    "Two-stage RASCALDUST complete, FW running without RASCALDUST\n");
 	}
 
-	pvr_fw_program_heap_bases(pvr_dev);
+	{
+		extern void pvr_fw_program_heap_bases(struct pvr_device *);
+		pvr_fw_program_heap_bases(pvr_dev);
+	}
 
 	return 0;
 
