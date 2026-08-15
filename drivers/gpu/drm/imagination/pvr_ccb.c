@@ -141,6 +141,10 @@ process_fwccb_command(struct pvr_device *pvr_dev, struct rogue_fwif_fwccb_cmd *c
 	switch (cmd->cmd_type) {
 	case ROGUE_FWIF_FWCCB_CMD_REQUEST_GPU_RESTART:
 		pvr_power_reset(pvr_dev, false);
+		{
+			extern void pvr_fw_program_heap_bases(struct pvr_device *);
+			pvr_fw_program_heap_bases(pvr_dev);
+		}
 		break;
 
 	case ROGUE_FWIF_FWCCB_CMD_FREELISTS_RECONSTRUCTION:
