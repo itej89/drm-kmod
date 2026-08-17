@@ -675,6 +675,65 @@ static void pvr_queue_submit_job_to_cccb(struct pvr_job *job)
 		pvr_fw_program_heap_bases(job->pvr_dev);
 	}
 #ifdef __FreeBSD__
+	if (job->fw_ccb_cmd_type == ROGUE_FWIF_CCB_CMD_TYPE_TQ_3D) {
+		struct rogue_fwif_cmd_transfer *tc = job->cmd;
+		static int n;
+
+		if (n < 8) {
+			u32 mode;
+
+			n++;
+			mode = tc->regs.isp_render & 0x3;
+			printf("PVRCHK TQ_3D[%d] mode=%u isp_rgn=0x%08x isp_render=0x%08x isp_bgobjvals=0x%08x\n",
+			    n, mode, tc->regs.isp_rgn, tc->regs.isp_render,
+			    tc->regs.isp_bgobjvals);
+			/*
+			 * isp_bgobjvals bit9 (enablebgtag) tells the ISP a
+			 * background object exists; it is fetched through
+			 * pds_bgnd0_base. The blob keeps these consistent --
+			 * bgtag set implies a non-zero base (docs/18). If we
+			 * set bgtag with a zero base, the ISP runs a PDS
+			 * program at address 0.
+			 */
+			/*
+			 * PBE state words: how each tile is emitted to memory.
+			 * The blob's value for a 1024x600 copy is
+			 * 0x020007fc96800000 (docs/18); ours has never been
+			 * compared. Wrong PBE state would corrupt or stall the
+			 * emit, which matches the observed blocky patches.
+			 */
+			printf("  PBE[0]=0x%llx PBE[1]=0x%llx PBE[2]=0x%llx mtile_size=0x%08x frag_screen=0x%08x\n",
+			    (unsigned long long)tc->regs.pbe_wordx_mrty[0],
+			    (unsigned long long)tc->regs.pbe_wordx_mrty[1],
+			    (unsigned long long)tc->regs.pbe_wordx_mrty[2],
+			    tc->regs.isp_mtile_size, tc->regs.frag_screen);
+			printf("  BGTAG=%u mask=%u pds_bgnd0=0x%llx pds_bgnd1=0x%llx pds_bgnd3=0x%llx\n",
+			    (tc->regs.isp_bgobjvals >> 9) & 1,
+			    (tc->regs.isp_bgobjvals >> 8) & 1,
+			    (unsigned long long)tc->regs.pds_bgnd0_base,
+			    (unsigned long long)tc->regs.pds_bgnd1_base,
+			    (unsigned long long)tc->regs.pds_bgnd3_sizeinfo);
+			printf("  cmd: isp_mtile_base=0x%llx isp_mtile_size=0x%08x isp_ctl=0x%08x\n",
+			    (unsigned long long)tc->regs.isp_mtile_base,
+			    tc->regs.isp_mtile_size, tc->regs.isp_ctl);
+			/*
+			 * The firmware programs 0xF20/0xF24 (isp_mtile_base) and
+			 * 0xF28 (isp_rgn) ONLY when mode_type == 2 (FAST_2D) --
+			 * see docs/17. In FAST_SCALE the ISP runs this transfer
+			 * on whatever the PREVIOUS job left in these registers,
+			 * so sample them here, at submit, to see what is
+			 * inherited.
+			 */
+			printf("  live INHERITED: [0xf18]=0x%08x [0xf20]=0x%08x [0xf24]=0x%08x [0xf28]=0x%08x [0xf38]=0x%08x\n",
+			    pvr_cr_read32(job->pvr_dev, 0x0f18),
+			    pvr_cr_read32(job->pvr_dev, 0x0f20),
+			    pvr_cr_read32(job->pvr_dev, 0x0f24),
+			    pvr_cr_read32(job->pvr_dev, 0x0f28),
+			    pvr_cr_read32(job->pvr_dev, 0x0f38));
+		}
+	}
+#endif
+#ifdef __FreeBSD__
 	{
 		extern void pvr_fw_sync_all_for_device(struct pvr_device *);
 		pvr_fw_sync_all_for_device(job->pvr_dev);

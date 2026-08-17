@@ -175,6 +175,36 @@ process_fwccb_command(struct pvr_device *pvr_dev, struct rogue_fwif_fwccb_cmd *c
 			"  PDS_EXEC_BASE=0x%llx USC_CODE_BASE=0x%llx\n",
 			(unsigned long long)((u64)pds_hi << 32 | pds_lo),
 			(unsigned long long)((u64)usc_hi << 32 | usc_lo));
+#ifdef __FreeBSD__
+		{
+			/* Dump the ISP block at hang time -- the state the
+			 * hardware is actually stuck in. Compare against the same
+			 * registers captured live from the WORKING blob driver
+			 * (docs/10): same silicon, no struct-layout inference.
+			 */
+			static int isp_dumps;
+
+			if (isp_dumps < 3) {
+				u32 r;
+
+				isp_dumps++;
+				printf("PVRISP dump#%d dm=%u reason=%u:\n",
+				    isp_dumps, data->dm, data->reset_reason);
+				/* step 4, not 8: 0xf24 is the high half of
+				 * isp_mtile_base and was being skipped.
+				 */
+				for (r = 0x0f00; r <= 0x0f40; r += 4)
+					printf("  [0x%04x]=0x%08x\n", r,
+					    pvr_cr_read32(pvr_dev, r));
+				for (r = 0x0f80; r <= 0x0fd8; r += 8)
+					printf("  [0x%04x]=0x%08x\n", r,
+					    pvr_cr_read32(pvr_dev, r));
+				printf("  [0x1038]=0x%08x [0x3e40]=0x%08x\n",
+				    pvr_cr_read32(pvr_dev, 0x1038),
+				    pvr_cr_read32(pvr_dev, 0x3e40));
+			}
+		}
+#endif
 		break;
 	}
 
