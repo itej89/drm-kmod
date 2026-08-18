@@ -221,15 +221,20 @@ static enum drm_connector_status
 vs_hdmi_connector_detect(struct drm_connector *connector, bool force)
 {
 	/*
-	 * Now that the HPD pin is muxed (it was not before the hdmi-0 pin
-	 * group was added), the core's hot-plug bit is meaningful. The helper
-	 * also reports connected if a valid EDID has ever been read, so a sink
-	 * that answers DDC but drives HPD weakly is not declared absent.
+	 * Always report connected.
+	 *
+	 * Hot-plug detect on this board is wired to a GPIO, not to the HDMI
+	 * core, so the core's HDMI_STATUS hot-plug bit reads clear even with a
+	 * sink attached and displaying - the same reason the EDID path ignores
+	 * it. Gating detect() on that bit makes the connector report
+	 * disconnected on a cold boot, so DRM never calls get_modes(), no
+	 * modes are ever published, and the compositor exits with "no monitors
+	 * available".
+	 *
+	 * Real hot-plug detection needs the HPD GPIO and an interrupt, which
+	 * this driver does not wire up yet.
 	 */
-	if (jh7110_hdmi_is_connected())
-		return (connector_status_connected);
-
-	return (connector_status_disconnected);
+	return (connector_status_connected);
 }
 
 static const struct drm_connector_funcs vs_hdmi_connector_funcs = {
@@ -246,11 +251,28 @@ static const struct drm_connector_funcs vs_hdmi_connector_funcs = {
  * offering, say, 1440x810 would be selected and then produce no signal,
  * because jh7110_hdmi_config_pll() has no table entry for its pixel clock.
  */
+/* 3840x2160@30 needs 297 MHz; 4K60's 594 MHz does not work here. */
+#define	VS_HDMI_MAX_PIXCLOCK	297000000U
+
 static enum drm_mode_status
 vs_hdmi_connector_mode_valid(struct drm_connector *connector,
 			     struct drm_display_mode *mode)
 {
-	if (!jh7110_hdmi_pixclock_supported((uint32_t)mode->clock * 1000))
+	uint32_t pixclock = (uint32_t)mode->clock * 1000;
+
+	/*
+	 * A PLL table entry is necessary but not sufficient. The pre/post PLL
+	 * tables carry entries up to 594 MHz, and the PHY does report both
+	 * PLLs locked at that rate, but the sink gets no usable signal: a
+	 * 3840x2160@60 modeset produces a blank display while the same panel
+	 * shows a picture when driven at a lower rate. StarFive documents
+	 * 4K@30 as this SoC's limit, so cap what we advertise rather than
+	 * letting DRM pick a mode the hardware cannot actually drive.
+	 */
+	if (pixclock > VS_HDMI_MAX_PIXCLOCK)
+		return (MODE_CLOCK_HIGH);
+
+	if (!jh7110_hdmi_pixclock_supported(pixclock))
 		return (MODE_CLOCK_RANGE);
 
 	return (MODE_OK);
