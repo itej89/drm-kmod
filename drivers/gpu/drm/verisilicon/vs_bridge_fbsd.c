@@ -38,6 +38,12 @@ extern void jh7110_hdmi_disable(void);
 extern bool jh7110_hdmi_is_available(void);
 extern int jh7110_hdmi_read_edid(uint8_t *buf, size_t len);
 extern bool jh7110_hdmi_is_connected(void);
+/* 1 connected, 0 disconnected, -1 unknown (no HPD GPIO). */
+extern int jh7110_hdmi_hpd_state(void);
+/* True if a sink answers DDC with a valid EDID header. */
+extern bool jh7110_hdmi_sink_present(void);
+/* Called on every HPD edge; cb may sleep. */
+extern void jh7110_hdmi_set_hotplug_cb(void (*cb)(void *), void *arg);
 extern bool jh7110_hdmi_pixclock_supported(uint32_t pixclock);
 
 #include "vs_bridge.h"
@@ -217,24 +223,63 @@ fallback:
 	return count;
 }
 
+
+/*
+ * HPD edge.
+ *
+ * drm_helper_hpd_irq_event(), not drm_kms_helper_hotplug_event(). The
+ * difference is the whole design: this one re-probes every connector and
+ * emits a uevent only when a status actually changed, while the other fires
+ * unconditionally.
+ *
+ * That matters because the HPD line is not quiet. With a display attached
+ * and driven it carries activity at the video refresh rate - about 30 edges
+ * a second at 4K30. Firing an unconditional event on each of those made DRM
+ * re-probe dozens of times a second and the compositor gave up. Re-probing
+ * and comparing costs a little work per edge and produces nothing when
+ * nothing changed, which is why StarFive's driver needs no debouncing.
+ *
+ * Runs on a taskqueue thread, so it may sleep - it re-probes and reads EDID.
+ */
+static void
+vs_hdmi_hotplug(void *arg)
+{
+	struct drm_device *drm_dev = arg;
+
+	drm_helper_hpd_irq_event(drm_dev);
+}
+
 static enum drm_connector_status
 vs_hdmi_connector_detect(struct drm_connector *connector, bool force)
 {
+	int hpd;
+
 	/*
-	 * Always report connected.
-	 *
-	 * Hot-plug detect on this board is wired to a GPIO, not to the HDMI
-	 * core, so the core's HDMI_STATUS hot-plug bit reads clear even with a
-	 * sink attached and displaying - the same reason the EDID path ignores
-	 * it. Gating detect() on that bit makes the connector report
-	 * disconnected on a cold boot, so DRM never calls get_modes(), no
-	 * modes are ever published, and the compositor exits with "no monitors
-	 * available".
-	 *
-	 * Real hot-plug detection needs the HPD GPIO and an interrupt, which
-	 * this driver does not wire up yet.
+	 * State comes from the HDMI controller, as it does in StarFive's
+	 * driver: the GPIO supplies the interrupt, this supplies the answer.
+	 * jh7110_hdmi_is_connected() enables the clocks before touching the
+	 * block - reading it unclocked stalls the bus and wedges the SoC, and
+	 * detect() can run before anything else has clocked it.
 	 */
-	return (connector_status_connected);
+	if (jh7110_hdmi_is_connected())
+		return (connector_status_connected);
+
+	/*
+	 * Second opinion for cables that do not carry pin 19: one on this
+	 * desk leaves HPD low for a display that is attached and working, so
+	 * a sink answering DDC with a valid EDID header counts as present.
+	 * With nothing attached the read times out and we report absent.
+	 */
+	if (jh7110_hdmi_sink_present())
+		return (connector_status_connected);
+
+	hpd = jh7110_hdmi_hpd_state();
+	if (hpd > 0)
+		return (connector_status_connected);
+	if (hpd < 0)
+		return (connector_status_connected);
+
+	return (connector_status_disconnected);
 }
 
 static const struct drm_connector_funcs vs_hdmi_connector_funcs = {
@@ -319,7 +364,33 @@ struct vs_bridge *vs_bridge_init(struct drm_device *drm_dev,
 		return ERR_PTR(ret);
 
 	drm_connector_helper_add(conn, &vs_hdmi_conn_helper_funcs);
+	/*
+	 * Opt into output polling. vs_drm.c already calls
+	 * drm_kms_helper_poll_init(), but the helper only probes connectors
+	 * that ask for it - the default of 0 means detect() is called once at
+	 * init and never again, so a display swapped at runtime is never
+	 * noticed. With this the helper re-runs detect(), re-reads EDID on a
+	 * new sink and sends a hot-plug event, which is what makes the
+	 * compositor switch modes without being restarted.
+	 *
+	 * Polling is a stopgap: DRM's output poll period is 10 s and only
+	 * reacts to a change in detect(), so a display unplugged and replaced
+	 * inside one interval is invisible and the CRTC keeps the removed
+	 * display's mode. Fixing that needs a real HPD interrupt, which in
+	 * turn needs an interrupt controller in jh7110_gpio.
+	 */
+	/*
+	 * DRM_CONNECTOR_POLL_HPD means this connector raises its own
+	 * hot-plug events, so the helper leaves it alone. The GPIO gives a
+	 * real interrupt now; polling would only reintroduce the 10 s window
+	 * in which a swap completed inside one interval went unnoticed and
+	 * the CRTC kept the removed display's mode.
+	 */
+	conn->polled = DRM_CONNECTOR_POLL_HPD;
+
 	drm_connector_attach_encoder(conn, enc);
+
+	jh7110_hdmi_set_hotplug_cb(vs_hdmi_hotplug, drm_dev);
 	bridge->conn = conn;
 
 	return bridge;
