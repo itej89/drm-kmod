@@ -38,6 +38,93 @@ extern void jh7110_hdmi_disable(void);
 extern bool jh7110_hdmi_is_available(void);
 extern int jh7110_hdmi_read_edid(uint8_t *buf, size_t len);
 extern bool jh7110_hdmi_is_connected(void);
+
+/*
+ * Display-controller state the reference platform programs and we did not.
+ *
+ * Found by dumping every DC register on Debian while it drove this panel at
+ * 1024x600, dumping the same registers here in the same mode, and diffing.
+ * These are the ones it sets and we leave at zero.
+ *
+ * They come in instances - two per pipe, four per plane - and the init
+ * sequence below only ever programmed the first of each set. The scale
+ * factors show it most clearly: 0x8000 is 1.0 in 1.15 fixed point, so the
+ * reference runs unity scale on every plane while ours sat at zero.
+ *
+ * Values are copied verbatim from the working system rather than derived:
+ * these registers are undocumented and most have no definition even in the
+ * driver own headers.
+ */
+static const struct {
+	uint32_t reg;
+	uint32_t val;
+} vs_dc_reference_init[] = {
+	{ 0x1524, 0x00000030 },
+	{ 0x1A00, 0x021f0000 },
+	{ 0x1A04, 0x021f0000 },
+	{ 0x1A10, 0xfeeefeee },
+	{ 0x1A14, 0xfeeefeee },
+	{ 0x1A20, 0x80008000 },
+	{ 0x1A24, 0x80008000 },
+	{ 0x1B00, 0x021f0000 },
+	{ 0x1B04, 0x021f0000 },
+	{ 0x1B08, 0x021f0000 },
+	{ 0x1B0C, 0x021f0000 },
+	{ 0x1B80, 0xfeeefeee },
+	{ 0x1B84, 0xfeeefeee },
+	{ 0x1B88, 0xfeeefeee },
+	{ 0x1B8C, 0xfeeefeee },
+	{ 0x1BC0, 0x80008000 },
+	{ 0x1BC4, 0x80008000 },
+	{ 0x1BC8, 0x80008000 },
+	{ 0x1BCC, 0x80008000 },
+	{ 0x1C00, 0x00000030 },
+	{ 0x1C04, 0x00000030 },
+	{ 0x1C08, 0x00000030 },
+	{ 0x1C0C, 0x00000030 },
+	{ 0x1E24, 0x15132827 },
+	{ 0x1E2C, 0x046c02c5 },
+	{ 0x1E34, 0x00bb3ad9 },
+	{ 0x1E3C, 0x05a2010d },
+	{ 0x1E44, 0x00003952 },
+	{ 0x1E48, 0x025200e6 },
+	{ 0x1E4C, 0x025200e6 },
+	{ 0x1E50, 0xff830034 },
+	{ 0x1E54, 0xff830034 },
+	{ 0x1E58, 0xfffffebd },
+	{ 0x1E5C, 0xfffffebd },
+	{ 0x1E60, 0xfe6401c0 },
+	{ 0x1E64, 0xfe6401c0 },
+	{ 0x1E68, 0x0000ffdc },
+	{ 0x1E6C, 0x0000ffdc },
+	{ 0x1E70, 0x00000040 },
+	{ 0x1E74, 0x00000040 },
+	{ 0x1E78, 0x00000200 },
+	{ 0x1E7C, 0x00000200 },
+	{ 0x1E80, 0x00000200 },
+	{ 0x1E84, 0x00000200 },
+	{ 0x20C0, 0x15132827 },
+	{ 0x20C4, 0x15132827 },
+	{ 0x20C8, 0x15132827 },
+	{ 0x20CC, 0x15132827 },
+	{ 0x2100, 0x046c02c5 },
+	{ 0x2104, 0x046c02c5 },
+	{ 0x2108, 0x046c02c5 },
+	{ 0x210C, 0x046c02c5 },
+	{ 0x2140, 0x00bb3ad9 },
+	{ 0x2144, 0x00bb3ad9 },
+	{ 0x2148, 0x00bb3ad9 },
+	{ 0x214C, 0x00bb3ad9 },
+	{ 0x2180, 0x05a2010d },
+	{ 0x2184, 0x05a2010d },
+	{ 0x2188, 0x05a2010d },
+	{ 0x218C, 0x05a2010d },
+	{ 0x21C0, 0x00003952 },
+	{ 0x21C4, 0x00003952 },
+	{ 0x21C8, 0x00003952 },
+	{ 0x21CC, 0x00003952 },
+};
+
 /* 1 connected, 0 disconnected, -1 unknown (no HPD GPIO). */
 extern int jh7110_hdmi_hpd_state(void);
 /* True if a sink answers DDC with a valid EDID header. */
@@ -53,6 +140,7 @@ extern bool jh7110_hdmi_pixclock_supported(uint32_t pixclock);
 
 void vs_hdmi_enable(struct vs_crtc *vcrtc)
 {
+	size_t i;
 	struct vs_dc *dc = vcrtc->dc;
 	unsigned int output = vcrtc->id;
 
@@ -65,6 +153,7 @@ void vs_hdmi_enable(struct vs_crtc *vcrtc)
 		 */
 		printf("vs_hdmi_enable: no CRTC state, skipping PHY setup\n");
 	} else {
+	size_t i;
 		const struct drm_display_mode *m =
 		    &vcrtc->base.state->adjusted_mode;
 		struct jh7110_hdmi_mode hm;
@@ -106,6 +195,14 @@ void vs_hdmi_enable(struct vs_crtc *vcrtc)
 
 	/* Scale config */
 	regmap_write(dc->regs, 0x1520, 0x33);
+
+	/*
+	 * Bring the rest of the DC to the state the reference platform has;
+	 * see vs_dc_reference_init[] above.
+	 */
+	for (i = 0; i < nitems(vs_dc_reference_init); i++)
+		regmap_write(dc->regs, vs_dc_reference_init[i].reg,
+			     vs_dc_reference_init[i].val);
 
 	/* Dither off */
 	regmap_write(dc->regs, 0x1410, 0);
@@ -172,6 +269,7 @@ void vs_hdmi_disable(struct vs_crtc *vcrtc)
 
 #define	VS_EDID_BLOCK_LEN	128
 #define	VS_EDID_MAX_BLOCKS	2
+
 
 static int vs_hdmi_connector_get_modes(struct drm_connector *connector)
 {
@@ -241,6 +339,8 @@ fallback:
  *
  * Runs on a taskqueue thread, so it may sleep - it re-probes and reads EDID.
  */
+
+
 static void
 vs_hdmi_hotplug(void *arg)
 {
