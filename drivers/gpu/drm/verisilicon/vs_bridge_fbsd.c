@@ -254,32 +254,36 @@ vs_hdmi_connector_detect(struct drm_connector *connector, bool force)
 {
 	int hpd;
 
-	/*
-	 * State comes from the HDMI controller, as it does in StarFive's
-	 * driver: the GPIO supplies the interrupt, this supplies the answer.
-	 * jh7110_hdmi_is_connected() enables the clocks before touching the
-	 * block - reading it unclocked stalls the bus and wedges the SoC, and
-	 * detect() can run before anything else has clocked it.
-	 */
-	if (jh7110_hdmi_is_connected())
-		return (connector_status_connected);
+	hpd = jh7110_hdmi_hpd_state();
+	if (hpd >= 0)
+		return (hpd > 0 ? connector_status_connected :
+		    connector_status_disconnected);
 
 	/*
-	 * Second opinion for cables that do not carry pin 19: one on this
-	 * desk leaves HPD low for a display that is attached and working, so
-	 * a sink answering DDC with a valid EDID header counts as present.
-	 * With nothing attached the read times out and we report absent.
+	 * Only reached when there is no HPD GPIO at all.
+	 *
+	 * DDC deliberately is not consulted when HPD is available, even
+	 * though it looks like a useful second opinion for cables that do not
+	 * carry pin 19. Asking it costs every disconnect: the read returns
+	 * the EDID still sitting in the controller's FIFO from the previous
+	 * display, the header validates, and an unplugged connector reports
+	 * connected. detect() then never changes status, so DRM never
+	 * re-reads EDID and a swapped display keeps the old one's mode.
+	 *
+	 * A cable that does not carry HPD reads as absent instead. That is
+	 * the better failure: it affects one broken cable, where trusting DDC
+	 * breaks hot-plug for every cable.
 	 */
 	if (jh7110_hdmi_sink_present())
 		return (connector_status_connected);
 
-	hpd = jh7110_hdmi_hpd_state();
-	if (hpd > 0)
-		return (connector_status_connected);
-	if (hpd < 0)
-		return (connector_status_connected);
-
-	return (connector_status_disconnected);
+	/*
+	 * Nothing to go on: report connected. Gating on a signal the board
+	 * may not provide once left DRM never calling get_modes(), so no
+	 * modes were published and the compositor exited with "no monitors
+	 * available".
+	 */
+	return (connector_status_connected);
 }
 
 static const struct drm_connector_funcs vs_hdmi_connector_funcs = {
@@ -380,11 +384,15 @@ struct vs_bridge *vs_bridge_init(struct drm_device *drm_dev,
 	 * turn needs an interrupt controller in jh7110_gpio.
 	 */
 	/*
-	 * DRM_CONNECTOR_POLL_HPD means this connector raises its own
-	 * hot-plug events, so the helper leaves it alone. The GPIO gives a
-	 * real interrupt now; polling would only reintroduce the 10 s window
-	 * in which a swap completed inside one interval went unnoticed and
-	 * the CRTC kept the removed display's mode.
+	 * DRM_CONNECTOR_POLL_HPD: this connector raises its own events, so
+	 * the helper leaves it alone. Matches StarFive's driver.
+	 *
+	 * This is only correct because no edge is dropped. Nothing masks the
+	 * pin now - the kernel throttles a storming source rather than
+	 * masking it - so an unplug is always observed, which is what makes
+	 * DRM re-read EDID on the replug. A missed disconnect is invisible:
+	 * the connector reads connected either side of the swap, DRM sees no
+	 * change and keeps the old display's mode.
 	 */
 	conn->polled = DRM_CONNECTOR_POLL_HPD;
 
