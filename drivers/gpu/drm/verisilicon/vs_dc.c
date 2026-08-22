@@ -66,7 +66,22 @@ static int vs_dc_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(36));
+	/*
+	 * 32 bits, not 36.
+	 *
+	 * The scanout address goes into VSDC_FB_ADDRESS, a single 32-bit
+	 * register, and the plane update writes it with lower_32_bits().
+	 * There is no companion high-address register. Advertising a 36-bit
+	 * mask lets the allocator hand back a buffer above 4 GB, whose top
+	 * bits are then silently dropped: a buffer at 0x103400000 is
+	 * programmed as 0x03400000 and the controller scans unrelated
+	 * memory, giving a blank screen.
+	 *
+	 * This was intermittent because it depended on where the allocator
+	 * happened to place the buffer - below 4 GB it worked, above it did
+	 * not.
+	 */
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 	if (ret) {
 		dev_err(dev, "No suitable DMA available\n");
 		return ret;
