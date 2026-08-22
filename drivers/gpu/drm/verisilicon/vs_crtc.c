@@ -86,9 +86,17 @@ static void vs_crtc_mode_set_nofb(struct drm_crtc *crtc)
 		regmap_set_bits(dc->regs, VSDC_DISP_VSYNC(output),
 				VSDC_DISP_VSYNC_POL);
 
-#ifndef __FreeBSD__
+	/*
+	 * Program the pixel clock for this mode.
+	 *
+	 * This was disabled on FreeBSD, which left the display controller
+	 * running at whatever rate the clock happened to be at - in practice
+	 * the fixed rate its device-tree parent declares, or leftover state
+	 * from a previous mode - while the HDMI PHY was programmed for the
+	 * mode's real rate. The two disagreeing is what produced banding and
+	 * blank output that varied between boots.
+	 */
 	WARN_ON(clk_set_rate(dc->pix_clk[output], mode->crtc_clock * 1000));
-#endif
 }
 
 static enum drm_mode_status
