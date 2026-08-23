@@ -558,8 +558,33 @@ pvr_device_init(struct pvr_device *pvr_dev)
 			clk_prepare_enable(clk_apb);
 		if (!IS_ERR_OR_NULL(clk_rtc))
 			clk_prepare_enable(clk_rtc);
-		if (!IS_ERR_OR_NULL(clk_div))
-			clk_set_rate(clk_div, 594000000);
+		if (!IS_ERR_OR_NULL(clk_div)) {
+			/*
+			 * GPU core clock rate, overridable at boot with the
+			 * loader tunable hw.pvr.core_clk_hz.
+			 *
+			 * The reference platform runs gpu_core at 396 MHz off a
+			 * 1188 MHz gpu_root. We ask for 594 MHz here, and with
+			 * our gpu_root at 1000 MHz that lands on 500 MHz - about
+			 * 26% above the reference. Renders lose random tiles at a
+			 * rate that grows with the amount of work, which is what
+			 * an over-clocked core looks like, so make the rate easy
+			 * to sweep instead of rebuilding for each value.
+			 */
+			unsigned long rate = 594000000UL;
+			char *ev = kern_getenv("hw.pvr.core_clk_hz");
+
+			if (ev != NULL) {
+				rate = strtoul(ev, NULL, 0);
+				freeenv(ev);
+				if (rate < 50000000UL)
+					rate = 594000000UL;
+			}
+
+			clk_set_rate(clk_div, rate);
+			dev_info(dev, "gpu core clk requested %lu Hz, got %lu Hz\n",
+				 rate, (unsigned long)clk_get_rate(clk_div));
+		}
 		err = clk_prepare_enable(pvr_dev->core_clk);
 		if (err) {
 			dev_err(dev, "failed to enable core clock: %d\n", err);
