@@ -546,13 +546,14 @@ pvr_device_init(struct pvr_device *pvr_dev)
 	 * and deassert resets following the StarFive JH7110 power sequence.
 	 */
 	{
-		struct clk *clk_apb, *clk_rtc, *clk_axi, *clk_div;
+		struct clk *clk_apb, *clk_rtc, *clk_axi, *clk_div, *clk_pll;
 		struct reset_control *rst_apb, *rst_doma;
 
 		clk_apb = devm_clk_get_optional(dev, "apb");
 		clk_rtc = devm_clk_get_optional(dev, "rtc");
 		clk_axi = devm_clk_get_optional(dev, "axi");
 		clk_div = devm_clk_get_optional(dev, "div");
+		clk_pll = devm_clk_get_optional(dev, "pll");
 
 		if (!IS_ERR_OR_NULL(clk_apb))
 			clk_prepare_enable(clk_apb);
@@ -571,8 +572,32 @@ pvr_device_init(struct pvr_device *pvr_dev)
 			 * an over-clocked core looks like, so make the rate easy
 			 * to sweep instead of rebuilding for each value.
 			 */
-			unsigned long rate = 594000000UL;
+			unsigned long rate = 396000000UL;
 			char *ev = kern_getenv("hw.pvr.core_clk_hz");
+
+			/*
+			 * Program the parent PLL first. gpu_root muxes over
+			 * {pll0_out, pll2_out} and gpu_core is an integer
+			 * divider off it, so the core rate is only reachable if
+			 * the PLL is right. The reference platform runs
+			 * pll2_out at 1188 MHz and divides by 3.
+			 */
+			if (!IS_ERR_OR_NULL(clk_pll)) {
+				unsigned long pll = 1188000000UL;
+				char *pv = kern_getenv("hw.pvr.pll_hz");
+
+				if (pv != NULL) {
+					pll = strtoul(pv, NULL, 0);
+					freeenv(pv);
+					if (pll < 100000000UL)
+						pll = 1188000000UL;
+				}
+
+				clk_set_rate(clk_pll, pll);
+				dev_info(dev,
+					 "gpu pll requested %lu Hz, got %lu Hz\n",
+					 pll, (unsigned long)clk_get_rate(clk_pll));
+			}
 
 			if (ev != NULL) {
 				rate = strtoul(ev, NULL, 0);
