@@ -2296,9 +2296,24 @@ void pvr_mmu_op_context_destroy(struct pvr_mmu_op_context *op_ctx)
 
 	pvr_mmu_op_context_sync(op_ctx);
 
-	/* Unmaps should be flushed immediately. Map flushes can be deferred. */
-	if (flush_caches && !op_ctx->map.sgt)
-		pvr_mmu_flush_exec(op_ctx->mmu_ctx->pvr_dev, true);
+	/*
+	 * Unmaps are always flushed immediately. Map flushes are deferred to
+	 * job submission by default; hw.pvr.mmu_sync=2 flushes them here
+	 * instead, so a mapping is live in the GPU MMU before anything can
+	 * reference it.
+	 */
+	{
+		bool flush_maps = false;
+		char *ev = kern_getenv("hw.pvr.mmu_sync");
+
+		if (ev != NULL) {
+			flush_maps = strtoul(ev, NULL, 0) >= 2;
+			freeenv(ev);
+		}
+
+		if (flush_caches && (!op_ctx->map.sgt || flush_maps))
+			pvr_mmu_flush_exec(op_ctx->mmu_ctx->pvr_dev, true);
+	}
 
 	while (op_ctx->map.l0_prealloc_tables) {
 		struct pvr_page_table_l0 *tmp = op_ctx->map.l0_prealloc_tables;
@@ -2484,6 +2499,20 @@ pvr_mmu_op_context_unmap_curr_page(struct pvr_mmu_op_context *op_ctx,
  */
 int pvr_mmu_unmap(struct pvr_mmu_op_context *op_ctx, u64 device_addr, u64 size)
 {
+#ifdef __FreeBSD__
+	/*
+	 * The GPU faulted on 0xda00042000, which the map log shows was mapped
+	 * as the most recent PDS block. Log the unmap side too: if the unmap
+	 * precedes the fault, the job is still using memory userspace has
+	 * already released.
+	 */
+	if (device_addr >= 0xDA00000000ull && device_addr < 0xDE00000000ull) {
+		drm_info(from_pvr_device(op_ctx->mmu_ctx->pvr_dev),
+			 "pvr_mmu_unmap: PDS heap VA=0x%lx size=0x%lx off=0x%lx\n",
+			 (unsigned long)device_addr, (unsigned long)size,
+			 (unsigned long)(device_addr - 0xDA00000000ull));
+	}
+#endif
 	int err = pvr_mmu_op_context_set_curr_page(op_ctx, device_addr, false);
 
 	if (err)

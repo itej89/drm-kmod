@@ -744,7 +744,26 @@ pvr_submit_jobs(struct pvr_device *pvr_dev, struct pvr_file *pvr_file,
 	 * Flush MMU if needed - this has been deferred until now to avoid
 	 * overuse of this expensive operation.
 	 */
-	err = pvr_mmu_flush_exec(pvr_dev, false);
+	/*
+	 * hw.pvr.mmu_sync:
+	 *   0  stock - fire and forget
+	 *   1+ wait for the firmware to acknowledge the flush
+	 *
+	 * The GPU has been seen faulting on 0xda00042000, an address the map
+	 * log shows mapped and never unmapped. A deferred, unacknowledged
+	 * cache flush would leave the MMU holding a stale negative entry for
+	 * exactly such a freshly-mapped page.
+	 */
+	{
+		bool mmu_wait = false;
+		char *ev = kern_getenv("hw.pvr.mmu_sync");
+
+		if (ev != NULL) {
+			mmu_wait = strtoul(ev, NULL, 0) >= 1;
+			freeenv(ev);
+		}
+		err = pvr_mmu_flush_exec(pvr_dev, mmu_wait);
+	}
 	if (err)
 		goto out_job_data_cleanup;
 
