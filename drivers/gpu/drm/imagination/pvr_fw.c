@@ -368,6 +368,36 @@ fw_fault_page_init(void *cpu_ptr, void *priv)
 		fault_page[i] = 0xdeadbee0;
 }
 
+#ifdef __FreeBSD__
+/**
+ * pvr_apm_latency_ms() - Firmware active-power-management latency.
+ *
+ * Upstream uses 0, so the firmware powers the GPU units down the instant a
+ * job finishes and must power them back up for the next one. On this SoC that
+ * thrashes: a trace covering two 3D TQ kicks held 256 power requests, with 8
+ * "units deinit" against 2 "GPU Units init". A kick that lands before the
+ * units are back hangs with "USC slots: 0 used by DM3" and no MMU fault.
+ *
+ * The proprietary driver on the same silicon reports 100 ms - see
+ * /sys/kernel/debug/pvr/gpu00/debug_dump, "APM enabled ... Latency: 100 ms" -
+ * and its trace pairs every power-down with a power-up before the next kick.
+ * Match it. hw.pvr.apm_latency_ms overrides; 0 restores upstream behaviour.
+ */
+static u32
+pvr_apm_latency_ms(void)
+{
+	u32 latency = 100;
+	char *ev = kern_getenv("hw.pvr.apm_latency_ms");
+
+	if (ev != NULL) {
+		latency = (u32)strtoul(ev, NULL, 0);
+		freeenv(ev);
+	}
+
+	return latency;
+}
+#endif
+
 static void
 fw_sysinit_init(void *cpu_ptr, void *priv)
 {
@@ -408,7 +438,11 @@ fw_sysinit_init(void *cpu_ptr, void *priv)
 	fwif_sysinit->hw_perf_filter = 0;
 	fwif_sysinit->firmware_perf = FW_PERF_CONF_NONE;
 	fwif_sysinit->initial_core_clock_speed = clock_speed_hz;
+#ifdef __FreeBSD__
+	fwif_sysinit->active_pm_latency_ms = pvr_apm_latency_ms();
+#else
 	fwif_sysinit->active_pm_latency_ms = 0;
+#endif
 	fwif_sysinit->gpio_validation_mode = ROGUE_FWIF_GPIO_VAL_OFF;
 	fwif_sysinit->firmware_started = false;
 	fwif_sysinit->marker_val = 1;
@@ -447,7 +481,11 @@ fw_runtime_cfg_init(void *cpu_ptr, void *priv)
 	WARN_ON(!clock_speed_hz);
 
 	runtime_cfg->core_clock_speed = clock_speed_hz;
+#ifdef __FreeBSD__
+	runtime_cfg->active_pm_latency_ms = pvr_apm_latency_ms();
+#else
 	runtime_cfg->active_pm_latency_ms = 0;
+#endif
 	runtime_cfg->active_pm_latency_persistant = true;
 	WARN_ON(PVR_FEATURE_VALUE(pvr_dev, num_clusters,
 				  &runtime_cfg->default_dusts_num_init) != 0);

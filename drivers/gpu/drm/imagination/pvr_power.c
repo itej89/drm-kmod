@@ -5,6 +5,7 @@
 #include "pvr_fw.h"
 #include "pvr_fw_startstop.h"
 #include "pvr_power.h"
+#include "pvr_fw_trace.h"
 #include "pvr_queue.h"
 #include "pvr_rogue_fwif.h"
 
@@ -202,6 +203,38 @@ pvr_watchdog_worker(struct work_struct *work)
 
 	if (pvr_dev->lost)
 		return;
+
+#ifdef __FreeBSD__
+	/*
+	 * hw.pvr.trace_watchdog dumps the firmware trace from the watchdog, so
+	 * it can be read during normal operation. The fault-path dump only
+	 * fires on a context reset, which is useless for comparing the power
+	 * state machine against the working Debian reference on runs that do
+	 * not fault.
+	 */
+	{
+		static int wd_dumps;
+		int wd_max = 0;
+		char *ev = kern_getenv("hw.pvr.trace_watchdog");
+
+		if (ev != NULL) {
+			wd_max = (int)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		if (wd_max > 0 && wd_dumps < wd_max) {
+			u32 n = 3000;
+			char *dv = kern_getenv("hw.pvr.fw_trace_dwords");
+
+			if (dv != NULL) {
+				n = (u32)strtoul(dv, NULL, 0);
+				freeenv(dv);
+			}
+			wd_dumps++;
+			pvr_fw_trace_dump(pvr_dev, n);
+		}
+	}
+#endif
 
 	if (pm_runtime_get_if_in_use(from_pvr_device(pvr_dev)->dev) <= 0)
 		goto out_requeue;
