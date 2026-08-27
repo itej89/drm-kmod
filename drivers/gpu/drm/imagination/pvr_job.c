@@ -202,6 +202,51 @@ pvr_frag_job_fw_cmd_init(struct pvr_job *job,
 	cmd->cmd_shared.cmn.frame_num = 0;
 	cmd->flags = convert_frag_flags(args->flags);
 	pvr_fw_object_get_fw_addr(job->hwrt->fw_obj, &cmd->cmd_shared.hwrt_data_fw_addr);
+
+#ifdef __FreeBSD__
+	/*
+	 * Something writes through a base register of zero (see the VA-0 trap
+	 * buffer). It is not in the HWRTDATA the kernel builds, so the next
+	 * place to look is the fragment command userspace hands us. Print the
+	 * address registers; hw.pvr.dump_frag caps how many jobs are shown.
+	 */
+	{
+		static int frag_dumps;
+		int frag_max = 0;
+		char *ev = kern_getenv("hw.pvr.dump_frag");
+
+		if (ev != NULL) {
+			frag_max = (int)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		if (frag_dumps < frag_max) {
+			frag_dumps++;
+			printf("PVRFRAG zlsctl=0x%llx zload=0x%llx stencil=0x%llx dummy_z=0x%llx dummy_s=0x%llx\n",
+			       (unsigned long long)cmd->regs.isp_zlsctl,
+			       (unsigned long long)cmd->regs.isp_zload_store_base,
+			       (unsigned long long)cmd->regs.isp_stencil_load_store_base,
+			       (unsigned long long)cmd->regs.isp_dummy_depth_store_base,
+			       (unsigned long long)cmd->regs.isp_dummy_stencil_store_base);
+			printf("PVRFRAG  scissor=0x%llx dbias=0x%llx oclqry=0x%llx fbcdc=0x%llx tpubc=0x%llx\n",
+			       (unsigned long long)cmd->regs.isp_scissor_base,
+			       (unsigned long long)cmd->regs.isp_dbias_base,
+			       (unsigned long long)cmd->regs.isp_oclqry_base,
+			       (unsigned long long)cmd->regs.fb_cdc_zls,
+			       (unsigned long long)cmd->regs.tpu_border_colour_table);
+			printf("PVRFRAG  pds_bgnd=%llx,%llx,%llx pr_bgnd=%llx,%llx,%llx pbe0=%llx ctl=0x%x bgv=0x%x\n",
+			       (unsigned long long)cmd->regs.pds_bgnd[0],
+			       (unsigned long long)cmd->regs.pds_bgnd[1],
+			       (unsigned long long)cmd->regs.pds_bgnd[2],
+			       (unsigned long long)cmd->regs.pds_pr_bgnd[0],
+			       (unsigned long long)cmd->regs.pds_pr_bgnd[1],
+			       (unsigned long long)cmd->regs.pds_pr_bgnd[2],
+			       (unsigned long long)cmd->regs.pbe_word[0][0],
+			       cmd->regs.isp_ctl, cmd->regs.isp_bgobjvals);
+		}
+	}
+#endif
+
 	return 0;
 }
 
