@@ -171,6 +171,36 @@ pvr_geom_job_fw_cmd_init(struct pvr_job *job,
 	cmd->cmd_shared.cmn.frame_num = 0;
 	cmd->flags = convert_geom_flags(args->flags);
 	pvr_fw_object_get_fw_addr(job->hwrt->fw_obj, &cmd->cmd_shared.hwrt_data_fw_addr);
+
+#ifdef __FreeBSD__
+	/*
+	 * Last kernel-visible place a zero base could hide: the HWRTDATA and
+	 * the fragment command are both clean. Shares hw.pvr.dump_frag.
+	 */
+	{
+		static int geom_dumps;
+		int geom_max = 0;
+		char *ev = kern_getenv("hw.pvr.dump_frag");
+
+		if (ev != NULL) {
+			geom_max = (int)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		if (geom_dumps < geom_max) {
+			geom_dumps++;
+			printf("PVRGEOM vdm_ctrl=0x%llx tpubc=0x%llx indirect0=0x%llx indirect1=0x%x ppp_ctrl=0x%x te_psg=0x%x tpu=0x%x pds_ctrl=0x%x coeff=0x%x\n",
+			       (unsigned long long)cmd->regs.vdm_ctrl_stream_base,
+			       (unsigned long long)cmd->regs.tpu_border_colour_table,
+			       (unsigned long long)cmd->regs.vdm_draw_indirect0,
+			       cmd->regs.vdm_draw_indirect1,
+			       cmd->regs.ppp_ctrl, cmd->regs.te_psg,
+			       cmd->regs.tpu, cmd->regs.pds_ctrl,
+			       cmd->regs.pds_coeff_free_prog);
+		}
+	}
+#endif
+
 	return 0;
 }
 

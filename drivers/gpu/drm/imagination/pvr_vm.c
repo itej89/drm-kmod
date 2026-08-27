@@ -616,7 +616,12 @@ pvr_vm_create_context(struct pvr_device *pvr_dev, bool is_userspace_context)
 	 * hw.pvr.trap_page = <bytes> backs device address 0 with real memory.
 	 * Off by default; this is a diagnostic, not a fix.
 	 */
-	if (is_userspace_context) {
+	/*
+	 * Applied to the firmware context as well as userspace ones: faults at
+	 * address 0 continue even with the buffer mapped in every user
+	 * context, which means the faulting context is not one of them.
+	 */
+	{
 		char *ev = kern_getenv("hw.pvr.trap_page");
 		u64 tsize = 0;
 
