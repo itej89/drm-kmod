@@ -1428,8 +1428,27 @@ pvr_probe(struct platform_device *plat_dev)
 	devm_pm_runtime_enable(&plat_dev->dev);
 	pm_runtime_mark_last_busy(&plat_dev->dev);
 
-	pm_runtime_set_autosuspend_delay(&plat_dev->dev, 50);
-	pm_runtime_use_autosuspend(&plat_dev->dev);
+	/*
+	 * hw.pvr.autosuspend_ms overrides the 50 ms autosuspend delay.
+	 *
+	 * At 50 ms a damage-driven compositor idles long enough between
+	 * frames to be suspended constantly: runtime PM calls
+	 * pvr_power_fw_disable(), which sends FORCED_IDLE and POW_OFF, and
+	 * the firmware trace then shows "GPU units deinit" immediately
+	 * before the "Kick 3D TQ" that hangs with zero USC slots in use.
+	 */
+	{
+		int asd = 50;
+		char *ev = kern_getenv("hw.pvr.autosuspend_ms");
+
+		if (ev != NULL) {
+			asd = (int)strtol(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		pm_runtime_set_autosuspend_delay(&plat_dev->dev, asd);
+		pm_runtime_use_autosuspend(&plat_dev->dev);
+	}
 	pvr_watchdog_init(pvr_dev);
 
 	dev_info(&plat_dev->dev, "pvr_probe: calling pvr_device_init\n");

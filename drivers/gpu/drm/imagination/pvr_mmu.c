@@ -1583,6 +1583,18 @@ pvr_page_table_l1_remove(struct pvr_mmu_op_context *op_ctx)
 
 	op_ctx->curr_page.l1_table->entries[op_ctx->curr_page.l0_table->parent_idx] = NULL;
 	op_ctx->curr_page.l0_table->parent_idx = PVR_IDX_INVALID;
+#ifdef __FreeBSD__
+	/*
+	 * Mode A faults are page-table level (MMU Status DATA_TYPE=0) on
+	 * addresses that are mapped, which is what a prematurely freed L0
+	 * table looks like. A whole compositor run produces zero PDS unmaps,
+	 * so no table covering the PDS heap should ever appear here.
+	 */
+	printf("PVRPT free L0 covering l1_idx=%u l0_idx=%u (l1 entry_count now %u)\n",
+	       (unsigned)op_ctx->curr_page.l1_table->parent_idx,
+	       (unsigned)op_ctx->curr_page.l0_table->parent_idx,
+	       (unsigned)op_ctx->curr_page.l1_table->entry_count);
+#endif
 	op_ctx->curr_page.l0_table->next_free = op_ctx->unmap.l0_free_tables;
 	op_ctx->unmap.l0_free_tables = op_ctx->curr_page.l0_table;
 	op_ctx->curr_page.l0_table = NULL;
