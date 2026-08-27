@@ -236,6 +236,36 @@ pvr_watchdog_worker(struct work_struct *work)
 	}
 #endif
 
+#ifdef __FreeBSD__
+	/*
+	 * hw.pvr.force_reset=N performs N hardware resets from the watchdog.
+	 *
+	 * Rendering is correct until the first GPU reset of a boot and
+	 * produces nothing for every context afterwards, so the question is
+	 * whether the firmware can be brought back without rebooting. Set the
+	 * tunable, wait a moment, then re-run tests/vk_reuse_render.
+	 */
+	{
+		static int forced_resets;
+		int want = 0;
+		char *ev = kern_getenv("hw.pvr.force_reset");
+
+		if (ev != NULL) {
+			want = (int)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		if (want > forced_resets) {
+			forced_resets++;
+			drm_info(from_pvr_device(pvr_dev),
+				 "force_reset: performing hard reset %d\n",
+				 forced_resets);
+			pvr_power_reset(pvr_dev, true);
+			goto out_requeue;
+		}
+	}
+#endif
+
 	if (pm_runtime_get_if_in_use(from_pvr_device(pvr_dev)->dev) <= 0)
 		goto out_requeue;
 

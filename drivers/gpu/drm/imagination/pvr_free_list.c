@@ -601,7 +601,45 @@ pvr_free_list_reconstruct(struct pvr_device *pvr_dev, u32 freelist_id)
 	free_list->current_pages -= free_list->ready_pages;
 
 	fw_data = free_list->fw_data;
-	fw_data->current_stack_top = fw_data->current_pages - 1;
+
+	/*
+	 * Restore the same fields free_list_fw_init() programs.
+	 *
+	 * The host side has just recounted the list by reinserting every
+	 * memory block, but only current_stack_top was written back - and it
+	 * was derived from the *stale* fw_data->current_pages, which the
+	 * firmware has been decrementing as it consumed pages. current_pages,
+	 * current_dev_addr and grow_pending were left as the firmware last
+	 * saw them, so after a reset the firmware believes it has far less
+	 * parameter memory than it does and silently drops tiles.
+	 *
+	 * Measured with tests/vk_reuse_render: renders are 4096/4096 until the
+	 * first GPU reset, and 0/4096 for every context afterwards until
+	 * reboot. hw.pvr.fl_reconstruct_fix=0 restores the old behaviour.
+	 */
+	{
+		bool fix = true;
+		char *ev = kern_getenv("hw.pvr.fl_reconstruct_fix");
+
+		if (ev != NULL) {
+			fix = strtoul(ev, NULL, 0) != 0;
+			freeenv(ev);
+		}
+
+		if (fix) {
+			fw_data->current_pages = free_list->current_pages;
+			fw_data->grow_pending = false;
+			fw_data->current_stack_top = fw_data->current_pages - 1;
+			fw_data->current_dev_addr =
+				(fw_data->freelist_dev_addr +
+				 ((fw_data->max_pages - fw_data->current_pages) *
+				  FREE_LIST_ENTRY_SIZE)) &
+				~((u64)ROGUE_BIF_PM_FREELIST_BASE_ADDR_ALIGNSIZE - 1);
+		} else {
+			fw_data->current_stack_top = fw_data->current_pages - 1;
+		}
+	}
+
 	fw_data->allocated_page_count = 0;
 	fw_data->allocated_mmu_page_count = 0;
 

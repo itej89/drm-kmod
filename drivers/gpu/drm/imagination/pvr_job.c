@@ -189,7 +189,8 @@ pvr_geom_job_fw_cmd_init(struct pvr_job *job,
 
 		if (geom_dumps < geom_max) {
 			geom_dumps++;
-			printf("PVRGEOM vdm_ctrl=0x%llx tpubc=0x%llx indirect0=0x%llx indirect1=0x%x ppp_ctrl=0x%x te_psg=0x%x tpu=0x%x pds_ctrl=0x%x coeff=0x%x\n",
+			printf("PVRGEOM args_flags=0x%x cmd_flags=0x%x vdm_ctrl=0x%llx tpubc=0x%llx indirect0=0x%llx indirect1=0x%x ppp_ctrl=0x%x te_psg=0x%x tpu=0x%x pds_ctrl=0x%x coeff=0x%x\n",
+			       args->flags, cmd->flags,
 			       (unsigned long long)cmd->regs.vdm_ctrl_stream_base,
 			       (unsigned long long)cmd->regs.tpu_border_colour_table,
 			       (unsigned long long)cmd->regs.vdm_draw_indirect0,
@@ -252,7 +253,8 @@ pvr_frag_job_fw_cmd_init(struct pvr_job *job,
 
 		if (frag_dumps < frag_max) {
 			frag_dumps++;
-			printf("PVRFRAG zlsctl=0x%llx zload=0x%llx stencil=0x%llx dummy_z=0x%llx dummy_s=0x%llx\n",
+			printf("PVRFRAG args_flags=0x%x cmd_flags=0x%x zlsctl=0x%llx zload=0x%llx stencil=0x%llx dummy_z=0x%llx dummy_s=0x%llx\n",
+			       args->flags, cmd->flags,
 			       (unsigned long long)cmd->regs.isp_zlsctl,
 			       (unsigned long long)cmd->regs.isp_zload_store_base,
 			       (unsigned long long)cmd->regs.isp_stencil_load_store_base,
