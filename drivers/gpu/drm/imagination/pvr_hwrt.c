@@ -458,12 +458,33 @@ hwrt_data_init_fw_structure(struct pvr_file *pvr_file,
 			freeenv(ev);
 		}
 
-		ev = kern_getenv("hw.pvr.force_mta");
+		/*
+		 * hw.pvr.mta_base gives each render target its OWN macrotile
+		 * array, carved out of the buffer already mapped at device
+		 * address 0 (hw.pvr.trap_page must cover base + slots*4K).
+		 *
+		 * Userspace passes 0 for every render target, so they all
+		 * share one array. An earlier test pointed them all at a
+		 * single forced address, which reproduced exactly that
+		 * aliasing and so could not show a difference - hence slots.
+		 *
+		 * The firmware reports lockups with no MMU fault and
+		 * RGX_CR_EVENT_STATUS=0x10 (ISP_END_MACROTILE) pending, which
+		 * is what a shared macrotile array would look like.
+		 */
+		ev = kern_getenv("hw.pvr.mta_base");
 		if (ev != NULL) {
-			if (hwrt_data->data.macrotile_array_dev_addr == 0)
-				hwrt_data->data.macrotile_array_dev_addr =
-					(u64)strtoul(ev, NULL, 0);
+			u64 mta_base = (u64)strtoul(ev, NULL, 0);
+
 			freeenv(ev);
+			if (mta_base != 0 &&
+			    hwrt_data->data.macrotile_array_dev_addr == 0) {
+				static atomic_t mta_slot = ATOMIC_INIT(0);
+				u32 slot = (u32)atomic_inc_return(&mta_slot) & 0x3ff;
+
+				hwrt_data->data.macrotile_array_dev_addr =
+					mta_base + ((u64)slot << 12);
+			}
 		}
 	}
 
