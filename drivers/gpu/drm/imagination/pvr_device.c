@@ -547,6 +547,7 @@ pvr_device_init(struct pvr_device *pvr_dev)
 	 */
 	{
 		struct clk *clk_apb, *clk_rtc, *clk_axi, *clk_div, *clk_pll;
+		struct clk *clk_root;
 		struct reset_control *rst_apb, *rst_doma;
 
 		clk_apb = devm_clk_get_optional(dev, "apb");
@@ -554,6 +555,7 @@ pvr_device_init(struct pvr_device *pvr_dev)
 		clk_axi = devm_clk_get_optional(dev, "axi");
 		clk_div = devm_clk_get_optional(dev, "div");
 		clk_pll = devm_clk_get_optional(dev, "pll");
+		clk_root = devm_clk_get_optional(dev, "root");
 
 		if (!IS_ERR_OR_NULL(clk_apb))
 			clk_prepare_enable(clk_apb);
@@ -582,21 +584,29 @@ pvr_device_init(struct pvr_device *pvr_dev)
 			 * the PLL is right. The reference platform runs
 			 * pll2_out at 1188 MHz and divides by 3.
 			 */
-			if (!IS_ERR_OR_NULL(clk_pll)) {
-				unsigned long pll = 1188000000UL;
-				char *pv = kern_getenv("hw.pvr.pll_hz");
+			/*
+			 * gpu_root is a mux over {pll0_out, pll2_out}. We come
+			 * up selecting pll0_out, which on this board runs at
+			 * 1000 MHz, so the divider can only reach 500 or
+			 * 333 MHz. The reference platform selects pll2_out at
+			 * 1188 MHz and divides by 3 for exactly 396 MHz.
+			 *
+			 * pll2_out is already at the right rate here - the mux
+			 * selection is the whole problem - so reparent it and
+			 * then ask for 396.
+			 */
+			if (!IS_ERR_OR_NULL(clk_root) &&
+			    !IS_ERR_OR_NULL(clk_pll)) {
+				int perr = clk_set_parent(clk_root, clk_pll);
 
-				if (pv != NULL) {
-					pll = strtoul(pv, NULL, 0);
-					freeenv(pv);
-					if (pll < 100000000UL)
-						pll = 1188000000UL;
-				}
-
-				clk_set_rate(clk_pll, pll);
 				dev_info(dev,
-					 "gpu pll requested %lu Hz, got %lu Hz\n",
-					 pll, (unsigned long)clk_get_rate(clk_pll));
+					 "gpu_root reparent to pll2: err=%d, root now %lu Hz\n",
+					 perr,
+					 (unsigned long)clk_get_rate(clk_root));
+			} else {
+				dev_info(dev,
+					 "gpu_root reparent skipped: root=%d pll=%d\n",
+					 clk_root ? 0 : 1, clk_pll ? 0 : 1);
 			}
 
 			if (ev != NULL) {

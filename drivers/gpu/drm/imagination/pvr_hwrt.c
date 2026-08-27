@@ -333,10 +333,64 @@ hwrt_init_common_fw_structure(struct pvr_file *pvr_file,
 	if (err)
 		return err;
 
+	/*
+	 * Diagnostic override for ISP_MTILE_SIZE.
+	 *
+	 * We derive this from tiles-per-macrotile, giving small values like
+	 * 6x2 and 8x2. The proprietary driver was captured programming a
+	 * constant 0x00500040 (x=80, y=64) for both a full-surface fill and a
+	 * 200x200 blit, i.e. it does not scale it with the render at all.
+	 *
+	 * This was tried once before and called inconclusive, but that was
+	 * judged on GPU fault counts, which swing wildly. There is now a
+	 * pixel-exact pass/fail metric, so it is worth measuring properly:
+	 *
+	 *   hw.pvr.isp_mtile_size=<hex>   force the raw register value
+	 */
+	{
+		char *ev = kern_getenv("hw.pvr.isp_mtile_size");
+
+		if (ev != NULL) {
+			u32 forced = (u32)strtoul(ev, NULL, 0);
+
+			freeenv(ev);
+			if (forced != 0) {
+				hwrt->common.isp_mtile_size = forced;
+				drm_info(from_pvr_device(pvr_dev),
+					 "HWRT: isp_mtile_size forced to 0x%08x\n",
+					 forced);
+			}
+		}
+	}
+
 	hwrt->common.tpc_stride = geom_data_args->tpc_stride;
 	hwrt->common.tpc_size = geom_data_args->tpc_size;
 
 	hwrt->common.rgn_header_size = args->region_header_size;
+
+	/*
+	 * Dump exactly what the kernel hands the firmware for this render
+	 * target.
+	 *
+	 * Renders using up to 12 region headers come out bit-exact every time;
+	 * 13 or more nearly always die with a GUILTY_LOCKUP on dm=3, and the
+	 * output is perfect whenever that fault does not fire. Every host-side
+	 * allocation has been measured and ruled out (region headers, free
+	 * lists, macrotile array, TPC), so the remaining difference has to be
+	 * in the values themselves. These are those values.
+	 */
+	drm_info(from_pvr_device(pvr_dev),
+		 "HWRT: te_mtile1=0x%08x te_mtile2=0x%08x isp_mtile_size=0x%08x "
+		 "rgn_hdr_size=%u tpc_stride=%u tpc_size=%u samples=%u\n",
+		 hwrt->common.te_mtile1, hwrt->common.te_mtile2,
+		 hwrt->common.isp_mtile_size, hwrt->common.rgn_header_size,
+		 hwrt->common.tpc_stride, hwrt->common.tpc_size,
+		 args->samples);
+	drm_info(from_pvr_device(pvr_dev),
+		 "HWRT: mtile_x=%u,%u,%u mtile_y=%u,%u,%u tiles=%ux%u\n",
+		 info.mtile_x[0], info.mtile_x[1], info.mtile_x[2],
+		 info.mtile_y[0], info.mtile_y[1], info.mtile_y[2],
+		 info.tile_size_x, info.tile_size_y);
 
 	err = pvr_fw_object_create(pvr_dev, sizeof(struct rogue_fwif_hwrtdata_common),
 				   PVR_BO_FW_FLAGS_DEVICE_UNCACHED, hwrtdata_common_init, hwrt,
@@ -381,6 +435,52 @@ hwrt_data_init_fw_structure(struct pvr_file *pvr_file,
 	hwrt_data->data.pm_mlist_dev_addr = rt_data_args->pm_mlist_dev_addr;
 	hwrt_data->data.macrotile_array_dev_addr = rt_data_args->macrotile_array_dev_addr;
 	hwrt_data->data.rgn_header_dev_addr = rt_data_args->region_header_dev_addr;
+
+	/*
+	 * Userspace passes 0 for the render target cache and the macrotile
+	 * array, so one of those is the base the GPU writes through. Point
+	 * each at a distinct offset inside the mapped trap buffer and the
+	 * next dump says which one it is:
+	 *
+	 *   hw.pvr.force_rtc=0xc0000  hw.pvr.force_mta=0x80000
+	 *
+	 * Only applied where the address is already zero, so a real address
+	 * from userspace is never overridden.
+	 */
+	{
+		char *ev;
+
+		ev = kern_getenv("hw.pvr.force_rtc");
+		if (ev != NULL) {
+			if (hwrt_data->data.rtc_dev_addr == 0)
+				hwrt_data->data.rtc_dev_addr =
+					(u64)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		ev = kern_getenv("hw.pvr.force_mta");
+		if (ev != NULL) {
+			if (hwrt_data->data.macrotile_array_dev_addr == 0)
+				hwrt_data->data.macrotile_array_dev_addr =
+					(u64)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+	}
+
+	/*
+	 * The GPU was caught writing to device address 0x1000 in a user
+	 * context, and no heap starts below 0x8000000000, so one of these is
+	 * zero. Print them all rather than guess which.
+	 */
+	drm_info(from_pvr_device(pvr_dev),
+		 "HWRTADDR tpc=0x%llx vheap=0x%llx rtc=0x%llx mlist=0x%llx "
+		 "mta=0x%llx rgnhdr=0x%llx\n",
+		 (unsigned long long)hwrt_data->data.tail_ptrs_dev_addr,
+		 (unsigned long long)hwrt_data->data.vheap_table_dev_addr,
+		 (unsigned long long)hwrt_data->data.rtc_dev_addr,
+		 (unsigned long long)hwrt_data->data.pm_mlist_dev_addr,
+		 (unsigned long long)hwrt_data->data.macrotile_array_dev_addr,
+		 (unsigned long long)hwrt_data->data.rgn_header_dev_addr);
 
 	rta_ctl = &hwrt_data->data.rta_ctl;
 

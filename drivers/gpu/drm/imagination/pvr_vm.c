@@ -59,6 +59,18 @@ struct pvr_vm_context {
 	struct kref ref_count;
 
 	/**
+	 * @trap_obj: Scratch buffer mapped at device address 0, or %NULL.
+	 *
+	 * The firmware reports the failing render as a BIF0 page fault on a
+	 * near-null address (0x0, 0x80, 0x140, 0x180, ... in 0x40 steps) while
+	 * every heap starts at 0x8000000000, so some base register is being
+	 * programmed as zero and the GPU writes at base+offset. Backing that
+	 * range with real memory turns the fault into evidence: whatever the
+	 * GPU leaves here names the structure whose base is missing.
+	 */
+	struct pvr_gem_object *trap_obj;
+
+	/**
 	 * @dummy_gem: GEM object to enable VM reservation. All private BOs
 	 * should use the @dummy_gem.resv and not their own _resv field.
 	 */
@@ -237,7 +249,15 @@ pvr_vm_bind_op_map_init(struct pvr_vm_bind_op *bind_op,
 	if (check_add_overflow(offset, size, &offset_plus_size))
 		return -EINVAL;
 
+	/*
+	 * User mappings must land in a declared heap. The diagnostic trap
+	 * mapping is the deliberate exception: it exists precisely to back the
+	 * address range that no heap covers.
+	 */
 	if (is_user &&
+#ifdef __FreeBSD__
+	    !(device_addr == 0 && pvr_obj == vm_ctx->trap_obj) &&
+#endif
 	    !pvr_find_heap_containing(vm_ctx->pvr_dev, device_addr, size)) {
 		return -EINVAL;
 	}
@@ -533,6 +553,11 @@ fw_mem_context_init(void *cpu_ptr, void *priv)
  *    or
  *  * Any error encountered while setting up internal structures.
  */
+#ifdef __FreeBSD__
+static void pvr_vm_trap_register(struct pvr_vm_context *vm_ctx);
+static void pvr_vm_trap_unregister(struct pvr_vm_context *vm_ctx);
+#endif
+
 struct pvr_vm_context *
 pvr_vm_create_context(struct pvr_device *pvr_dev, bool is_userspace_context)
 {
@@ -586,6 +611,52 @@ pvr_vm_create_context(struct pvr_device *pvr_dev, bool is_userspace_context)
 	mutex_init(&vm_ctx->lock);
 	kref_init(&vm_ctx->ref_count);
 
+#ifdef __FreeBSD__
+	/*
+	 * hw.pvr.trap_page = <bytes> backs device address 0 with real memory.
+	 * Off by default; this is a diagnostic, not a fix.
+	 */
+	if (is_userspace_context) {
+		char *ev = kern_getenv("hw.pvr.trap_page");
+		u64 tsize = 0;
+
+		if (ev != NULL) {
+			tsize = (u64)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		if (tsize != 0) {
+			tsize = round_up(tsize, PAGE_SIZE);
+			vm_ctx->trap_obj =
+				pvr_gem_object_create(pvr_dev, tsize,
+						      DRM_PVR_BO_BYPASS_DEVICE_CACHE);
+			if (IS_ERR_OR_NULL(vm_ctx->trap_obj)) {
+				vm_ctx->trap_obj = NULL;
+				drm_info(drm_dev, "trap page: alloc failed\n");
+			} else {
+				int terr;
+
+				/* Set before mapping: the heap-check
+				 * exemption in pvr_vm_bind_op_map_init()
+				 * matches on this pointer.
+				 */
+				terr = pvr_vm_map(vm_ctx, vm_ctx->trap_obj,
+						  0, 0, tsize);
+
+				drm_info(drm_dev,
+					 "trap page: %llu bytes at VA 0, map err=%d\n",
+					 (unsigned long long)tsize, terr);
+				if (terr != 0) {
+					pvr_gem_object_put(vm_ctx->trap_obj);
+					vm_ctx->trap_obj = NULL;
+				} else {
+					pvr_vm_trap_register(vm_ctx);
+				}
+			}
+		}
+	}
+#endif
+
 	return vm_ctx;
 
 err_page_table_destroy:
@@ -611,6 +682,121 @@ pvr_vm_unmap_all(struct pvr_vm_context *vm_ctx)
 			     vm_ctx->gpuvm_mgr.mm_range));
 }
 
+#ifdef __FreeBSD__
+#define PVR_TRAP_MAX_CTX 8
+static struct pvr_vm_context *pvr_trap_ctxs[PVR_TRAP_MAX_CTX];
+static DEFINE_MUTEX(pvr_trap_lock);
+
+static void
+pvr_vm_trap_register(struct pvr_vm_context *vm_ctx)
+{
+	int i;
+
+	mutex_lock(&pvr_trap_lock);
+	for (i = 0; i < PVR_TRAP_MAX_CTX; i++) {
+		if (pvr_trap_ctxs[i] == NULL) {
+			pvr_trap_ctxs[i] = vm_ctx;
+			break;
+		}
+	}
+	mutex_unlock(&pvr_trap_lock);
+}
+
+static void
+pvr_vm_trap_unregister(struct pvr_vm_context *vm_ctx)
+{
+	int i;
+
+	mutex_lock(&pvr_trap_lock);
+	for (i = 0; i < PVR_TRAP_MAX_CTX; i++) {
+		if (pvr_trap_ctxs[i] == vm_ctx)
+			pvr_trap_ctxs[i] = NULL;
+	}
+	mutex_unlock(&pvr_trap_lock);
+}
+
+/**
+ * pvr_vm_trap_dump_all() - Print any GPU writes landed on a trap page.
+ * @pvr_dev: Target PowerVR device.
+ *
+ * Buffer objects come back zeroed, so every non-zero word here was written by
+ * the GPU to an address it should never have used.
+ */
+void
+pvr_vm_trap_dump_all(struct pvr_device *pvr_dev)
+{
+	int i;
+
+	mutex_lock(&pvr_trap_lock);
+	for (i = 0; i < PVR_TRAP_MAX_CTX; i++) {
+		struct pvr_vm_context *vm_ctx = pvr_trap_ctxs[i];
+		u32 *w, dwords, d, lines = 0;
+
+		if (vm_ctx == NULL || vm_ctx->trap_obj == NULL)
+			continue;
+
+		w = pvr_gem_object_vmap(vm_ctx->trap_obj);
+		if (IS_ERR_OR_NULL(w))
+			continue;
+
+		dwords = vm_ctx->trap_obj->base.base.size / sizeof(u32);
+		{
+			u32 nz = 0, hi = 0, k;
+
+			for (k = 0; k < dwords; k++) {
+				if (w[k] != 0) {
+					nz++;
+					hi = k;
+				}
+			}
+			printf("PVRTRAP ctx%d: %u dwords at VA 0, %u written, highest 0x%05x\n",
+			       i, dwords, nz, hi * 4);
+		}
+
+		/*
+		 * Summarise as contiguous written runs. The extent and stride
+		 * of each run identify the structure; a fixed line budget just
+		 * truncated it.
+		 */
+		{
+			u32 run_start = 0;
+			bool in_run = false;
+
+			for (d = 0; d + 8 <= dwords; d += 8) {
+				bool nz = (w[d] | w[d + 1] | w[d + 2] |
+					   w[d + 3] | w[d + 4] | w[d + 5] |
+					   w[d + 6] | w[d + 7]) != 0;
+
+				if (nz && !in_run) {
+					run_start = d;
+					in_run = true;
+				} else if (!nz && in_run) {
+					printf("PVRTRAP  run 0x%05x..0x%05x len=%u\n",
+					       run_start * 4, d * 4 - 1,
+					       (d - run_start) * 4);
+					printf("PVRTRAP   head %08x %08x %08x %08x\n",
+					       w[run_start], w[run_start + 1],
+					       w[run_start + 2], w[run_start + 3]);
+					in_run = false;
+					lines++;
+				}
+			}
+			if (in_run) {
+				printf("PVRTRAP  run 0x%05x..0x%05x len=%u\n",
+				       run_start * 4, d * 4 - 1,
+				       (d - run_start) * 4);
+				lines++;
+			}
+		}
+		if (lines == 0)
+			printf("PVRTRAP  (all zero - nothing written)\n");
+
+		pvr_gem_object_vunmap(vm_ctx->trap_obj);
+	}
+	mutex_unlock(&pvr_trap_lock);
+}
+#endif
+
 /**
  * pvr_vm_context_release() - Teardown a VM context.
  * @ref_count: Pointer to reference counter of the VM context.
@@ -627,7 +813,18 @@ pvr_vm_context_release(struct kref *ref_count)
 	if (vm_ctx->fw_mem_ctx_obj)
 		pvr_fw_object_destroy(vm_ctx->fw_mem_ctx_obj);
 
+#ifdef __FreeBSD__
+	pvr_vm_trap_unregister(vm_ctx);
+#endif
+
 	pvr_vm_unmap_all(vm_ctx);
+
+#ifdef __FreeBSD__
+	if (vm_ctx->trap_obj != NULL) {
+		pvr_gem_object_put(vm_ctx->trap_obj);
+		vm_ctx->trap_obj = NULL;
+	}
+#endif
 
 	pvr_mmu_context_destroy(vm_ctx->mmu_ctx);
 	drm_gem_private_object_fini(&vm_ctx->dummy_gem);

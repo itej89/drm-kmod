@@ -69,8 +69,25 @@ int pvr_fw_trace_init(struct pvr_device *pvr_dev)
 		}
 	}
 
-	/* TODO: Provide control of group mask. */
-	fw_trace->group_mask = 0;
+	/*
+	 * Group mask, settable at boot with hw.pvr.fw_trace_mask.
+	 *
+	 * Every host-side value handed to the firmware has been measured and
+	 * matches on both sides of the 12-region-header boundary, so the next
+	 * thing to look at is what the firmware itself does. The interesting
+	 * groups here are PM (0x40, parameter manager), RTD (0x80, render
+	 * target data), SPM (0x100, partial render / out-of-memory) and
+	 * HWR (0x400, recovery); MAIN is 0x2.
+	 */
+	{
+		char *ev = kern_getenv("hw.pvr.fw_trace_mask");
+
+		fw_trace->group_mask = 0;
+		if (ev != NULL) {
+			fw_trace->group_mask = (u32)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+	}
 
 	fw_trace->tracebuf_ctrl =
 		pvr_fw_object_create_and_map(pvr_dev,
@@ -467,6 +484,56 @@ pvr_fw_trace_debugfs_init(struct pvr_device *pvr_dev, struct dentry *dir)
 		debugfs_create_file(filename, 0400, dir,
 				    &fw_trace->buffers[thread_nr],
 				    &pvr_fw_trace_fops);
+	}
+}
+#endif
+
+
+#ifdef __FreeBSD__
+/**
+ * pvr_fw_trace_dump() - Dump raw firmware trace dwords to the kernel log.
+ * @pvr_dev: Target PowerVR device.
+ * @max_dwords: Maximum dwords to print per thread.
+ *
+ * The decoded printer is tied to seq_file and debugfs, and debugfs is not
+ * mounted here, so this prints the raw ring contents instead. Entry IDs can be
+ * decoded afterwards against the stid_fmts table.
+ */
+void
+pvr_fw_trace_dump(struct pvr_device *pvr_dev, u32 max_dwords)
+{
+	struct pvr_fw_trace *fw_trace = &pvr_dev->fw_dev.fw_trace;
+	u32 thread_nr;
+
+	if (!fw_trace->tracebuf_ctrl)
+		return;
+
+	for (thread_nr = 0; thread_nr < ARRAY_SIZE(fw_trace->buffers);
+	     thread_nr++) {
+		struct rogue_fwif_tracebuf_space *space =
+			&fw_trace->tracebuf_ctrl->tracebuf[thread_nr];
+		u32 *buf = fw_trace->buffers[thread_nr].buf;
+		u32 wroff, i, printed = 0;
+
+		if (!buf)
+			continue;
+
+		wroff = space->trace_pointer;
+		printf("PVRFWTRACE thread%u wroff=%u:\n", thread_nr, wroff);
+
+		/* Walk backwards from the write pointer: most recent first. */
+		for (i = 0; i < max_dwords; i++) {
+			u32 idx = (wroff + ROGUE_FW_TRACE_BUF_DEFAULT_SIZE_IN_DWORDS
+				   - 1 - i) %
+				  ROGUE_FW_TRACE_BUF_DEFAULT_SIZE_IN_DWORDS;
+
+			if (buf[idx] == 0)
+				continue;
+
+			printf("  [%5u]=0x%08x\n", idx, buf[idx]);
+			if (++printed >= max_dwords)
+				break;
+		}
 	}
 }
 #endif

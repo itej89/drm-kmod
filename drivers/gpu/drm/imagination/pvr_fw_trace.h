@@ -63,6 +63,9 @@ struct pvr_fw_trace {
 };
 
 int pvr_fw_trace_init(struct pvr_device *pvr_dev);
+#ifdef __FreeBSD__
+void pvr_fw_trace_dump(struct pvr_device *pvr_dev, u32 max_dwords);
+#endif
 void pvr_fw_trace_fini(struct pvr_device *pvr_dev);
 
 #if defined(CONFIG_DEBUG_FS)

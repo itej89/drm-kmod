@@ -261,6 +261,24 @@ pvr_free_list_insert_pages_locked(struct pvr_free_list *free_list,
 	/* Make sure our free_list update is flushed. */
 	wmb();
 
+	/*
+	 * The GPU sweeps device addresses upward from 0 until it runs out of
+	 * mapping, which is what a free list full of bad page numbers would
+	 * look like. These entries are physical page numbers.
+	 */
+	{
+		static int fl_dumps;
+
+		if (fl_dumps < 4) {
+			fl_dumps++;
+			printf("PVRFL insert off=%u num=%u: %08x %08x %08x %08x %08x %08x %08x %08x\n",
+			       offset - num_pages, num_pages,
+			       page_list[0], page_list[1], page_list[2],
+			       page_list[3], page_list[4], page_list[5],
+			       page_list[6], page_list[7]);
+		}
+	}
+
 	pvr_gem_object_vunmap(free_list->obj);
 
 	return 0;

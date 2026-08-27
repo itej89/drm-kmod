@@ -2,6 +2,8 @@
 /* Copyright (c) 2023 Imagination Technologies Ltd. */
 
 #include "pvr_ccb.h"
+#include "pvr_fw_trace.h"
+#include "pvr_vm.h"
 #include "pvr_device.h"
 #include "pvr_drv.h"
 #include "pvr_free_list.h"
@@ -176,6 +178,36 @@ process_fwccb_command(struct pvr_device *pvr_dev, struct rogue_fwif_fwccb_cmd *c
 			(unsigned long long)((u64)pds_hi << 32 | pds_lo),
 			(unsigned long long)((u64)usc_hi << 32 | usc_lo));
 #ifdef __FreeBSD__
+		{
+			/* The firmware's own trace, if enabled with
+			 * hw.pvr.fw_trace_mask - what the FW was doing when it
+			 * gave up, which the post-reset registers below cannot
+			 * tell us.
+			 */
+			static int trace_dumps;
+			int trace_max = 2;
+			char *tv = kern_getenv("hw.pvr.dump_limit");
+
+			if (tv != NULL) {
+				trace_max = (int)strtoul(tv, NULL, 0);
+				freeenv(tv);
+			}
+
+			if (trace_dumps < trace_max) {
+				trace_dumps++;
+				{
+					u32 n = 600;
+					char *dv = kern_getenv("hw.pvr.fw_trace_dwords");
+
+					if (dv != NULL) {
+						n = (u32)strtoul(dv, NULL, 0);
+						freeenv(dv);
+					}
+					pvr_fw_trace_dump(pvr_dev, n);
+				}
+				pvr_vm_trap_dump_all(pvr_dev);
+			}
+		}
 		{
 			/* Dump the ISP block at hang time -- the state the
 			 * hardware is actually stuck in. Compare against the same
