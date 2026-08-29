@@ -16,6 +16,10 @@ void pvr_device_lost(struct pvr_device *pvr_dev);
 
 bool pvr_power_is_idle(struct pvr_device *pvr_dev);
 
+int pvr_power_notify_apm_latency(struct pvr_device *pvr_dev);
+#ifdef __FreeBSD__
+void pvr_power_fbsd_register(struct pvr_device *pvr_dev);
+#endif
 int pvr_power_device_suspend(struct device *dev);
 int pvr_power_device_resume(struct device *dev);
 int pvr_power_device_idle(struct device *dev);

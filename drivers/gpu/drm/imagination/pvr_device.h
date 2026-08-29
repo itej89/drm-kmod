@@ -60,6 +60,15 @@ struct pvr_fw_version {
  * struct pvr_device - powervr-specific wrapper for &struct drm_device
  */
 struct pvr_device {
+#ifdef __FreeBSD__
+	/*
+	 * JH7110 GPU power domain (JH7110_PD_GPUA), acquired in
+	 * pvr_device_gpu_init(). Typed void * so consumers of this header do
+	 * not need <dev/pwrdom/pwrdom.h>.
+	 */
+	void *fbsd_pwrdom;
+#endif
+
 	/**
 	 * @base: The underlying &struct drm_device.
 	 *

@@ -25,6 +25,11 @@
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#ifdef __FreeBSD__
+#include <dev/ofw/ofw_bus.h>
+#include <dev/ofw/ofw_bus_subr.h>
+#include <dev/pwrdom/pwrdom.h>
+#endif
 #include <linux/slab.h>
 #include <linux/stddef.h>
 #include <linux/types.h>
@@ -634,13 +639,77 @@ pvr_device_init(struct pvr_device *pvr_dev)
 
 		rst_apb = devm_reset_control_get_optional_exclusive(dev, "apb");
 		rst_doma = devm_reset_control_get_optional_exclusive(dev, "doma");
-		if (!IS_ERR_OR_NULL(rst_apb))
-			reset_control_deassert(rst_apb);
-		if (!IS_ERR_OR_NULL(rst_doma))
-			reset_control_deassert(rst_doma);
+		/*
+		 * Report whether the reset lines actually resolved and
+		 * deasserted. `_optional_` returns NULL when the provider is
+		 * missing, which makes the deassert a silent no-op - and the
+		 * GPU-internal power controller aborts every power request on
+		 * this board while the DDK's completes them all.
+		 */
+		{
+			int ra = -1, rd = -1;
+
+			if (!IS_ERR_OR_NULL(rst_apb))
+				ra = reset_control_deassert(rst_apb);
+			if (!IS_ERR_OR_NULL(rst_doma))
+				rd = reset_control_deassert(rst_doma);
+
+			dev_info(dev,
+				 "GPU resets: apb=%s deassert=%d, doma=%s deassert=%d\n",
+				 IS_ERR(rst_apb) ? "ERR" : (rst_apb ? "ok" : "NULL"), ra,
+				 IS_ERR(rst_doma) ? "ERR" : (rst_doma ? "ok" : "NULL"), rd);
+		}
 
 		udelay(10);
 		dev_info(dev, "GPU clocks enabled, resets deasserted\n");
+
+		/*
+		 * GPU power domain (JH7110_PD_GPUA).
+		 *
+		 * Debian makes the GPU device the domain's genpd consumer and
+		 * lets it suspend: CURR_POWER_MODE cycles with the GPUA bit
+		 * clear (0x13 -> 0x33 observed) and genpd shows
+		 * "GPUA off-0 / 18000000.gpu suspended".
+		 *
+		 * Ours has no consumer at all - jh7110_pmu forces GPUA on at
+		 * attach (0x03 -> 0x17) and nothing can ever release it. Take
+		 * ownership here so the domain has a real consumer, which is
+		 * the prerequisite for ever powering it down.
+		 *
+		 * This step only acquires and enables: the island stays on, so
+		 * behaviour is unchanged. hw.pvr.pwrdom=0 skips it.
+		 */
+		{
+			device_t bdev = dev->bsddev;
+			phandle_t node;
+			pwrdom_t pd = NULL;
+			int perr = ENXIO;
+			char *ev = kern_getenv("hw.pvr.pwrdom");
+			int want = 1;
+
+			if (ev != NULL) {
+				want = (int)strtoul(ev, NULL, 0);
+				freeenv(ev);
+			}
+
+			if (want && bdev != NULL) {
+				node = ofw_bus_get_node(bdev);
+				perr = pwrdom_get_by_ofw_idx(bdev, node, 0, &pd);
+				if (perr == 0 && pd != NULL) {
+					perr = pwrdom_enable(pd);
+					if (perr == 0)
+						pvr_dev->fbsd_pwrdom = pd;
+				}
+			}
+
+			dev_info(dev, "GPU power domain: %s err=%d\n",
+				 pvr_dev->fbsd_pwrdom ? "acquired+enabled" :
+				 (want ? "NOT acquired" : "disabled by tunable"),
+				 perr);
+
+			/* Hand the device to the hw.pvr_suspend sysctl. */
+			pvr_power_fbsd_register(pvr_dev);
+		}
 	}
 #endif
 

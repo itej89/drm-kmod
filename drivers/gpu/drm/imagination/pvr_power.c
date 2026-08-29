@@ -5,6 +5,12 @@
 #include "pvr_fw.h"
 #include "pvr_fw_startstop.h"
 #include "pvr_power.h"
+#ifdef __FreeBSD__
+#include <sys/sysctl.h>
+#endif
+#ifdef __FreeBSD__
+#include <dev/pwrdom/pwrdom.h>
+#endif
 #include "pvr_fw_trace.h"
 #include "pvr_queue.h"
 #include "pvr_rogue_fwif.h"
@@ -73,6 +79,29 @@ pvr_power_request_idle(struct pvr_device *pvr_dev)
 	pow_cmd.cmd_type = ROGUE_FWIF_KCCB_CMD_POW;
 	pow_cmd.cmd_data.pow_data.pow_type = ROGUE_FWIF_POW_FORCED_IDLE_REQ;
 	pow_cmd.cmd_data.pow_data.power_req_data.pow_request_type = ROGUE_FWIF_POWER_FORCE_IDLE;
+
+	return pvr_power_send_command(pvr_dev, &pow_cmd);
+}
+
+/**
+ * pvr_power_notify_apm_latency() - Tell the firmware to re-read the APM latency.
+ * @pvr_dev: Target PowerVR device.
+ *
+ * The driver fills in runtime_cfg->active_pm_latency_ms once at init and never
+ * tells the firmware, so the firmware keeps whatever it booted with. Comparing
+ * firmware traces against the DDK on the same silicon, "Active PM latency set
+ * to %d ms" appears once per 3D TQ kick there and **never** here, while our
+ * power request rate is 19.3 per kick against their 6.2.
+ *
+ * The command carries no payload - it makes the firmware re-read runtime_cfg.
+ */
+int
+pvr_power_notify_apm_latency(struct pvr_device *pvr_dev)
+{
+	struct rogue_fwif_kccb_cmd pow_cmd = { 0 };
+
+	pow_cmd.cmd_type = ROGUE_FWIF_KCCB_CMD_POW;
+	pow_cmd.cmd_data.pow_data.pow_type = ROGUE_FWIF_POW_APM_LATENCY_CHANGE;
 
 	return pvr_power_send_command(pvr_dev, &pow_cmd);
 }
@@ -329,6 +358,21 @@ pvr_power_device_suspend(struct device *dev)
 	clk_disable_unprepare(pvr_dev->sys_clk);
 	clk_disable_unprepare(pvr_dev->core_clk);
 
+#ifdef __FreeBSD__
+	/*
+	 * Drop the SoC power island (JH7110_PD_GPUA) last, once the firmware is
+	 * stopped and the clocks are gated. Debian's genpd does exactly this
+	 * and its CURR_POWER_MODE shows the GPUA bit clear while the GPU is
+	 * idle; ours has never powered the island down at all.
+	 */
+	if (pvr_dev->fbsd_pwrdom != NULL) {
+		int perr = pwrdom_disable((pwrdom_t)pvr_dev->fbsd_pwrdom);
+
+		drm_info(from_pvr_device(pvr_dev),
+			 "power domain disable err=%d\n", perr);
+	}
+#endif
+
 err_drm_dev_exit:
 	drm_dev_exit(idx);
 
@@ -346,6 +390,18 @@ pvr_power_device_resume(struct device *dev)
 
 	if (!drm_dev_enter(drm_dev, &idx))
 		return -EIO;
+
+#ifdef __FreeBSD__
+	/* Island first: the clocks and registers below live inside it. */
+	if (pvr_dev->fbsd_pwrdom != NULL) {
+		err = pwrdom_enable((pwrdom_t)pvr_dev->fbsd_pwrdom);
+		if (err) {
+			drm_err(from_pvr_device(pvr_dev),
+				"power domain enable failed (%d)\n", err);
+			goto err_drm_dev_exit;
+		}
+	}
+#endif
 
 	err = clk_prepare_enable(pvr_dev->core_clk);
 	if (err)
@@ -516,3 +572,54 @@ pvr_watchdog_fini(struct pvr_device *pvr_dev)
 {
 	cancel_delayed_work_sync(&pvr_dev->watchdog.work);
 }
+
+
+#ifdef __FreeBSD__
+/*
+ * Manual suspend/resume, for proving the power-down path.
+ *
+ * pvr_power_device_suspend()/resume() are complete but nothing calls them:
+ * LinuxKPI's pm_runtime is a pure stub, so the GPU never idles and the power
+ * island stays on forever. Automatic runtime PM additionally needs a resume
+ * hook on every path that submits work - miss one and the GPU is touched
+ * while powered down. So drive it by hand first and confirm the island really
+ * cycles:
+ *
+ *   sysctl hw.pvr.suspend=1   stop FW, gate clocks, drop the island
+ *   sysctl hw.pvr.suspend=0   raise the island, ungate, restart FW
+ */
+static struct pvr_device *pvr_fbsd_dev;
+
+void
+pvr_power_fbsd_register(struct pvr_device *pvr_dev)
+{
+	pvr_fbsd_dev = pvr_dev;
+}
+
+static int
+pvr_fbsd_suspend_sysctl(SYSCTL_HANDLER_ARGS)
+{
+	int val = 0, error;
+
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error != 0 || req->newptr == NULL)
+		return (error);
+	if (pvr_fbsd_dev == NULL)
+		return (ENXIO);
+
+	if (val)
+		error = pvr_power_device_suspend(
+		    from_pvr_device(pvr_fbsd_dev)->dev);
+	else
+		error = pvr_power_device_resume(
+		    from_pvr_device(pvr_fbsd_dev)->dev);
+
+	printf("PVRPM %s err=%d\n", val ? "suspend" : "resume", error);
+	return (error > 0 ? error : -error);
+}
+
+SYSCTL_PROC(_hw, OID_AUTO, pvr_suspend,
+    CTLTYPE_INT | CTLFLAG_WR | CTLFLAG_MPSAFE, NULL, 0,
+    pvr_fbsd_suspend_sysctl, "I",
+    "1 = suspend GPU (stop FW, gate clocks, drop power island); 0 = resume");
+#endif
