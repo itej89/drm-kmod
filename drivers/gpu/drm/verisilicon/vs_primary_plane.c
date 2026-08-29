@@ -140,6 +140,42 @@ static void vs_primary_plane_atomic_update(struct drm_plane *plane,
 
 	dma_addr = vs_fb_get_dma_addr(fb, &state->src);
 
+#ifdef __FreeBSD__
+	/*
+	 * Flush the composable cache over the scanout buffer before handing it
+	 * to the display.
+	 *
+	 * On this SoC GPU DMA writes land in the L2/composable cache at the
+	 * normal physical address, and nothing flushes them before the display
+	 * controller reads DRAM. drm_gem_shmem only routes CPU mappings
+	 * through the uncached window, and only when map_wc is set - which is
+	 * explicitly cleared for imported dma-bufs, i.e. for exactly these
+	 * scanout buffers.
+	 *
+	 * Measured: with the CPU renderer the same buffer reaches the display
+	 * fully (0.00% unwritten) while the GPU renderer leaves it 95% blank,
+	 * even though headless GPU rendering to its own buffer is pixel-exact
+	 * at the same moment. hw.pvr.scanout_flush=0 disables this.
+	 */
+	{
+		extern void sifive_ccache_flush_range(uint64_t, unsigned long);
+		char *ev = kern_getenv("hw.pvr.scanout_flush");
+		int enable = 1;
+
+		if (ev != NULL) {
+			enable = (int)strtol(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		if (enable) {
+			unsigned long len =
+				(unsigned long)fb->pitches[0] * fb->height;
+
+			sifive_ccache_flush_range((uint64_t)dma_addr, len);
+		}
+	}
+#endif
+
 	regmap_write(dc->regs, VSDC_FB_ADDRESS(output),
 		     lower_32_bits(dma_addr));
 	regmap_write(dc->regs, VSDC_FB_STRIDE(output),

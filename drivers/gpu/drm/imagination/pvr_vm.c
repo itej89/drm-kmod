@@ -613,6 +613,29 @@ pvr_vm_create_context(struct pvr_device *pvr_dev, bool is_userspace_context)
 
 #ifdef __FreeBSD__
 	/*
+	 * The 8-render rule says only a *new* context's first render is at
+	 * risk, yet the compositor runs one context correctly for ~15 s and
+	 * then collapses. Count contexts so the collapse can be correlated
+	 * with a context creation or with the first GPU reset instead of
+	 * assumed to be the same bug. hw.pvr.ctx_log=1 enables.
+	 */
+	{
+		static int ctx_seq;
+		char *ev = kern_getenv("hw.pvr.ctx_log");
+
+		if (ev != NULL) {
+			int on = (int)strtoul(ev, NULL, 0);
+
+			freeenv(ev);
+			if (on)
+				printf("PVRCTX create #%d user=%d\n",
+				       ++ctx_seq, is_userspace_context ? 1 : 0);
+		}
+	}
+#endif
+
+#ifdef __FreeBSD__
+	/*
 	 * hw.pvr.trap_page = <bytes> backs device address 0 with real memory.
 	 * Off by default; this is a diagnostic, not a fix.
 	 */
@@ -665,6 +688,19 @@ pvr_vm_create_context(struct pvr_device *pvr_dev, bool is_userspace_context)
 	return vm_ctx;
 
 err_page_table_destroy:
+#ifdef __FreeBSD__
+	{
+		char *ev = kern_getenv("hw.pvr.ctx_log");
+
+		if (ev != NULL) {
+			int on = (int)strtoul(ev, NULL, 0);
+
+			freeenv(ev);
+			if (on)
+				printf("PVRCTX destroy\n");
+		}
+	}
+#endif
 	pvr_mmu_context_destroy(vm_ctx->mmu_ctx);
 
 err_free:

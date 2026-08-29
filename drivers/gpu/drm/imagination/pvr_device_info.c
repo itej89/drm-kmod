@@ -89,6 +89,21 @@ static void pvr_device_info_set_common(struct pvr_device *pvr_dev, const u64 *bi
  */
 void pvr_device_info_set_quirks(struct pvr_device *pvr_dev, const u64 *quirks, u32 quirks_size)
 {
+#ifdef __FreeBSD__
+	/*
+	 * Print the raw quirk bitmask the firmware declares. The kernel and
+	 * Mesa carry disjoint BRN lists, so anything the firmware asserts that
+	 * the kernel has no slot for is silently dropped.
+	 */
+	{
+		u32 i;
+
+		printf("PVRQUIRK raw bitmask (%u words):", quirks_size);
+		for (i = 0; i < quirks_size; i++)
+			printf(" [%u]=0x%016llx", i, (unsigned long long)quirks[i]);
+		printf("\n");
+	}
+#endif
 	BUILD_BUG_ON(ARRAY_SIZE(quirks_mapping) != PVR_FW_HAS_BRN_MAX);
 
 	pvr_device_info_set_common(pvr_dev, quirks, quirks_size, quirks_mapping,
@@ -104,6 +119,16 @@ void pvr_device_info_set_quirks(struct pvr_device *pvr_dev, const u64 *quirks, u
 void pvr_device_info_set_enhancements(struct pvr_device *pvr_dev, const u64 *enhancements,
 				      u32 enhancements_size)
 {
+#ifdef __FreeBSD__
+	{
+		u32 k;
+
+		printf("PVRERN raw bitmask (%u words):", enhancements_size);
+		for (k = 0; k < enhancements_size; k++)
+			printf(" [%u]=0x%016llx", k, (unsigned long long)enhancements[k]);
+		printf("\n");
+	}
+#endif
 	BUILD_BUG_ON(ARRAY_SIZE(enhancements_mapping) != PVR_FW_HAS_ERN_MAX);
 
 	pvr_device_info_set_common(pvr_dev, enhancements, enhancements_size,

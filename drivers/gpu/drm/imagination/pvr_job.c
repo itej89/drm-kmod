@@ -7,6 +7,7 @@
 #include "pvr_gem.h"
 #include "pvr_hwrt.h"
 #include "pvr_job.h"
+#include "pvr_free_list.h"
 #include "pvr_mmu.h"
 #include "pvr_power.h"
 #include "pvr_rogue_fwif.h"
@@ -174,6 +175,86 @@ pvr_geom_job_fw_cmd_init(struct pvr_job *job,
 
 #ifdef __FreeBSD__
 	/*
+	 * One compact line per fragment job naming the render target it uses.
+	 *
+	 * The compositor alternates two imported scanout buffers: one renders
+	 * correctly every time, the other is always blank and resets the GPU on
+	 * every flip to it. The PBE words are identical for both (same 1024x600
+	 * surface), so the only way to tell the jobs apart is the HWRT they
+	 * reference. rgn_header_dev_addr is unique per render target.
+	 *
+	 *   hw.pvr.log_rt=<n>   log the first n fragment jobs
+	 */
+	{
+		static int rt_logs;
+		int rt_max = 0;
+		char *ev = kern_getenv("hw.pvr.log_rt");
+
+		if (ev != NULL) {
+			rt_max = (int)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		if (rt_logs < rt_max) {
+			rt_logs++;
+			{
+				/*
+				 * Free list bookkeeping as the firmware sees
+				 * it, per job. Renders alternate pass/fail
+				 * with one reset per failure, and free list
+				 * *size* changes nothing - so the suspicion is
+				 * that current_pages is consumed by a render
+				 * and only restored by the HWR reconstruct
+				 * path, never by normal completion.
+				 */
+				struct pvr_hwrt_dataset *ds =
+					job->hwrt->hwrt_dataset;
+				int fl;
+
+				for (fl = 0; fl < ROGUE_FWIF_NUM_RTDATA_FREELISTS; fl++) {
+					struct pvr_free_list *f = ds->free_lists[fl];
+
+					if (f == NULL || f->fw_data == NULL)
+						continue;
+					printf("PVRFL job=%d fl%d cur_pages=%u stack_top=%u alloc=%u ready=%u max=%u\n",
+					       rt_logs, fl,
+					       f->fw_data->current_pages,
+					       f->fw_data->current_stack_top,
+					       f->fw_data->allocated_page_count,
+					       f->fw_data->ready_pages,
+					       f->fw_data->max_pages);
+				}
+			}
+			{
+				/*
+				 * Live firmware HWRT state, not the stale
+				 * local copy. A render after a success fails
+				 * and a render after a reset succeeds, so the
+				 * state left behind by each is the thing to
+				 * compare: FRAG_FINISHED vs HWR.
+				 */
+				struct rogue_fwif_hwrtdata *fwd =
+					pvr_fw_object_vmap(job->hwrt->fw_obj);
+
+				if (!IS_ERR_OR_NULL(fwd)) {
+					printf("PVRST job=%d hwrt_state=%u flags=0x%x\n",
+					       rt_logs, fwd->state,
+					       fwd->hwrt_data_flags);
+					pvr_fw_object_vunmap(job->hwrt->fw_obj);
+				}
+			}
+			printf("PVRRT job=%d hwrt_fw=0x%08x rgn=0x%llx mlist=0x%llx tpc=0x%llx\n",
+			       rt_logs,
+			       cmd->cmd_shared.hwrt_data_fw_addr,
+			       (unsigned long long)job->hwrt->data.rgn_header_dev_addr,
+			       (unsigned long long)job->hwrt->data.pm_mlist_dev_addr,
+			       (unsigned long long)job->hwrt->data.tail_ptrs_dev_addr);
+		}
+	}
+#endif
+
+#ifdef __FreeBSD__
+	/*
 	 * Last kernel-visible place a zero base could hide: the HWRTDATA and
 	 * the fragment command are both clean. Shares hw.pvr.dump_frag.
 	 */
@@ -266,7 +347,7 @@ pvr_frag_job_fw_cmd_init(struct pvr_job *job,
 			       (unsigned long long)cmd->regs.isp_oclqry_base,
 			       (unsigned long long)cmd->regs.fb_cdc_zls,
 			       (unsigned long long)cmd->regs.tpu_border_colour_table);
-			printf("PVRFRAG  pds_bgnd=%llx,%llx,%llx pr_bgnd=%llx,%llx,%llx pbe0=%llx ctl=0x%x bgv=0x%x\n",
+			printf("PVRFRAG  pds_bgnd=%llx,%llx,%llx pr_bgnd=%llx,%llx,%llx pbe0=%llx pbe1=%llx pbe2=%llx ctl=0x%x bgv=0x%x\n",
 			       (unsigned long long)cmd->regs.pds_bgnd[0],
 			       (unsigned long long)cmd->regs.pds_bgnd[1],
 			       (unsigned long long)cmd->regs.pds_bgnd[2],
@@ -274,6 +355,8 @@ pvr_frag_job_fw_cmd_init(struct pvr_job *job,
 			       (unsigned long long)cmd->regs.pds_pr_bgnd[1],
 			       (unsigned long long)cmd->regs.pds_pr_bgnd[2],
 			       (unsigned long long)cmd->regs.pbe_word[0][0],
+			       (unsigned long long)cmd->regs.pbe_word[0][1],
+			       (unsigned long long)cmd->regs.pbe_word[0][2],
 			       cmd->regs.isp_ctl, cmd->regs.isp_bgobjvals);
 		}
 	}
