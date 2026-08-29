@@ -80,6 +80,42 @@ rogue_slc_init(struct pvr_device *pvr_dev)
 	if (PVR_HAS_QUIRK(pvr_dev, 71242) && !PVR_HAS_FEATURE(pvr_dev, gpu_multicore_support))
 		reg_val |= ROGUE_CR_SLC_CTRL_MISC_LAZYWB_OVERRIDE_EN;
 
+#ifdef __FreeBSD__
+	/*
+	 * hw.pvr.force_lazywb=1 applies the BRN 71242 SLC writeback override
+	 * regardless of the multicore feature.
+	 *
+	 * The firmware declares BRN 71242 *and* gpu_multicore_support, so the
+	 * condition above skips the workaround. But that feature means the
+	 * design supports multicore, not that cores are present - this part is
+	 * BXE-4-32 MC1 and the DDK reports "1 core in the system". If the
+	 * erratum applies to single-core instances, we are skipping a cache
+	 * workaround we need.
+	 */
+	{
+		char *ev = kern_getenv("hw.pvr.force_lazywb");
+
+		if (ev != NULL) {
+			if (strtoul(ev, NULL, 0) != 0)
+				reg_val |= ROGUE_CR_SLC_CTRL_MISC_LAZYWB_OVERRIDE_EN;
+			freeenv(ev);
+		}
+	}
+#endif
+
+#ifdef __FreeBSD__
+	/*
+	 * The BRN 71242 workaround sets LAZYWB_OVERRIDE, but only when the
+	 * part lacks multicore support - so whether a cache-writeback
+	 * workaround is applied depends on what the firmware declares. Print
+	 * the inputs and the resulting SLC control value.
+	 */
+	printf("PVRSLC brn71242=%d multicore=%d slc_line_bits=%u reg_val=0x%08x lazywb=%d\n",
+	       PVR_HAS_QUIRK(pvr_dev, 71242) ? 1 : 0,
+	       PVR_HAS_FEATURE(pvr_dev, gpu_multicore_support) ? 1 : 0,
+	       slc_cache_line_size_bits, reg_val,
+	       (reg_val & ROGUE_CR_SLC_CTRL_MISC_LAZYWB_OVERRIDE_EN) ? 1 : 0);
+#endif
 	pvr_cr_write32(pvr_dev, ROGUE_CR_SLC_CTRL_MISC, reg_val);
 
 	return 0;
@@ -163,6 +199,46 @@ pvr_fw_start(struct pvr_device *pvr_dev)
 
 	pvr_cr_write64(pvr_dev, ROGUE_CR_SOFT_RESET, 0x0);
 	(void)pvr_cr_read64(pvr_dev, ROGUE_CR_SOFT_RESET);
+
+#ifdef __FreeBSD__
+	/*
+	 * ROGUE_CR_CLK_CTRL: per-unit OFF / ON / AUTO clock gating.
+	 *
+	 * We never write this register - upstream does not, and neither did we,
+	 * so it keeps whatever the reset default is. The DDK's start sequence
+	 * does program it. This matters because the firmware's power controller
+	 * cannot gate a unit whose clock the host has forced ON: EXP-129 shows
+	 * every single power-off request refused (Aborted 269/269, unit mask
+	 * 0x01000702) where Debian's byte-identical request on the same silicon
+	 * completes 37/37.
+	 *
+	 * Log the live value unconditionally; hw.pvr.clk_ctrl_auto=1 programs
+	 * every unit to AUTO (0xAAAAAA002A2AAAAA, within MASKFULL
+	 * 0xFFFFFF003F3FFFFF) so the two can be A/B'd.
+	 */
+	{
+		u64 cc = pvr_cr_read64(pvr_dev, ROGUE_CR_CLK_CTRL);
+		char *ev = kern_getenv("hw.pvr.clk_ctrl_auto");
+		int want_auto = 0;
+
+		if (ev != NULL) {
+			want_auto = (int)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		printf("PVRCLKCTRL boot=0x%016llx maskfull=0x%016llx\n",
+		       (unsigned long long)cc,
+		       (unsigned long long)ROGUE_CR_CLK_CTRL_MASKFULL);
+
+		if (want_auto) {
+			pvr_cr_write64(pvr_dev, ROGUE_CR_CLK_CTRL,
+				       0xAAAAAA002A2AAAAAULL);
+			cc = pvr_cr_read64(pvr_dev, ROGUE_CR_CLK_CTRL);
+			printf("PVRCLKCTRL forced all-AUTO, readback=0x%016llx\n",
+			       (unsigned long long)cc);
+		}
+	}
+#endif
 
 	/* ... and afterwards. */
 	udelay(3);

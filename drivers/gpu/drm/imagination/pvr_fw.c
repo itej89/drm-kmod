@@ -1182,6 +1182,42 @@ pvr_fw_init(struct pvr_device *pvr_dev)
 
 	fw_dev->booted = true;
 
+#ifdef __FreeBSD__
+	/* hw.pvr.apm_notify=0 disables; on by default. */
+	{
+		char *ev = kern_getenv("hw.pvr.apm_notify");
+		int on = 1;
+
+		if (ev != NULL) {
+			on = (int)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+		if (on) {
+			int aerr = pvr_power_notify_apm_latency(pvr_dev);
+
+			drm_info(from_pvr_device(pvr_dev),
+				 "APM latency notify sent, err=%d\n", aerr);
+		}
+	}
+#endif
+
+#ifdef __FreeBSD__
+	/*
+	 * Read SOFT_RESET back once the firmware is up. Every GPU power
+	 * request is rejected in 1-2 ticks - an instant refusal, not a
+	 * timeout - and a core still held in soft reset is the obvious reason
+	 * the power controller would refuse to transition it.
+	 */
+	{
+		u64 sr = pvr_cr_read64(pvr_dev, ROGUE_CR_SOFT_RESET);
+
+		printf("PVRSR SOFT_RESET=0x%016llx  rascaldusts=%d garten=%d\n",
+		       (unsigned long long)sr,
+		       (sr & ROGUE_CR_SOFT_RESET_RASCALDUSTS_EN) ? 1 : 0,
+		       (sr & ROGUE_CR_SOFT_RESET_GARTEN_EN) ? 1 : 0);
+	}
+#endif
+
 	/*
 	 * Two-stage RASCALDUST boot for BXE-4-32 (JH7110):
 	 * Stage 1 (above): boot with POW_RASCALDUST to bring DUST power
@@ -1190,7 +1226,20 @@ pvr_fw_init(struct pvr_device *pvr_dev)
 	 * the firmware power manager never runs and never zeroes
 	 * CR_PDS_EXEC_BASE between jobs.
 	 */
-	if (fw_dev->fwif_sysdata->config_flags & ROGUE_FWIF_INICFG_POW_RASCALDUST) {
+	/*
+	 * hw.pvr_pow_rascaldust=1 keeps RASCALDUST enabled, i.e. skips stage 2
+	 * and runs the way the DDK does.
+	 *
+	 * Stage 2 exists to stop the firmware power manager zeroing
+	 * CR_PDS_EXEC_BASE between jobs - but that theory was later disproved
+	 * (26 of 40 jobs completed with it reading 0), and disabling the power
+	 * manager leaves the firmware issuing power requests that can never
+	 * complete: 425 of 425 aborted here, 0 of 8 on the DDK.
+	 */
+	if (pvr_pow_rascaldust_enable) {
+		drm_info(from_pvr_device(pvr_dev),
+		    "RASCALDUST kept enabled (hw.pvr_pow_rascaldust=1), skipping stage 2\n");
+	} else if (fw_dev->fwif_sysdata->config_flags & ROGUE_FWIF_INICFG_POW_RASCALDUST) {
 		drm_info(from_pvr_device(pvr_dev),
 		    "Two-stage RASCALDUST: rebooting FW without RASCALDUST\n");
 		pvr_fw_stop(pvr_dev);
