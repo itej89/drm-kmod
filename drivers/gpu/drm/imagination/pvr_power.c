@@ -623,3 +623,90 @@ SYSCTL_PROC(_hw, OID_AUTO, pvr_suspend,
     pvr_fbsd_suspend_sysctl, "I",
     "1 = suspend GPU (stop FW, gate clocks, drop power island); 0 = resume");
 #endif
+
+
+#ifdef __FreeBSD__
+/*
+ * Issue the firmware's power-request sequence from the host WHILE the firmware
+ * is running and idle.
+ *
+ * Every earlier replay ran with the firmware stopped and got no response at all
+ * - on this board and on the DDK reference. That leaves two possibilities:
+ * the controller only answers its own core, or it is armed by something a
+ * running firmware maintains. This separates them:
+ *
+ *   response (ABORT or COMPLETE) -> armed by the running firmware; the missing
+ *                                   step is init, and can be bisected
+ *   still nothing                -> requester-gated; no host sequence will ever
+ *                                   work and the answer is in the firmware
+ *
+ * sysctl hw.pvr_powreq=1  (off) / 2 (on).  Racy against the firmware's own
+ * polling by construction - read the result as presence/absence of a response,
+ * not as a reliable value.
+ */
+static int
+pvr_fbsd_powreq_sysctl(SYSCTL_HANDLER_ARGS)
+{
+	struct pvr_device *pvr_dev = pvr_fbsd_dev;
+	u32 mask, st = 0, n, ndusts, t0, spins;
+	int val = 0, error;
+
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error != 0 || req->newptr == NULL)
+		return (error);
+	if (pvr_dev == NULL)
+		return (ENXIO);
+	if (val != 1 && val != 2)
+		return (EINVAL);
+
+	/*
+	 * Derive the mask the way the firmware does, in
+	 * pow_changing_number_of_dusts_from_to:
+	 *     mask = (((1 << ndusts) - 1) << 10) | 0x301
+	 * with the dust count read from CR 0xF308. Bit 1 is deliberately absent -
+	 * it is the trigger, applied by the second write below.
+	 *
+	 * This used to be the constant 0x01000702, captured from a live DDK
+	 * register. That value already has bit 1 set, so "mask | 2" wrote the
+	 * identical word twice and no trigger edge ever occurred.
+	 */
+	ndusts = pvr_cr_read32(pvr_dev, 0xF308);
+	if (ndusts == 0 || ndusts > 16)
+		ndusts = 1;
+	mask = (((1u << ndusts) - 1u) << 10) | 0x301u;
+	if (val == 2)
+		mask |= 0x01000000u;
+
+	pvr_cr_write32(pvr_dev, 0x0138, 0xc00);
+	/* the prep both firmwares do before every request */
+	pvr_cr_write32(pvr_dev, 0x0100, 0xf3fffc1du);
+	pvr_cr_write32(pvr_dev, 0x0104, 0xffeffff8u);
+	(void)pvr_cr_read32(pvr_dev, 0x0100);
+	pvr_cr_write32(pvr_dev, ROGUE_CR_XPU_BROADCAST, 1);
+	(void)pvr_cr_read32(pvr_dev, ROGUE_CR_XPU_BROADCAST);
+	pvr_cr_write32(pvr_dev, 0x0038, mask);
+	/* one GPU TIMER tick, the way the firmware's udelay at c00082a4 does it */
+	t0 = pvr_cr_read32(pvr_dev, 0x0160);
+	for (spins = 0; spins < 1000000; spins++)
+		if (pvr_cr_read32(pvr_dev, 0x0160) != t0)
+			break;
+	pvr_cr_write32(pvr_dev, 0x0038, mask | 2);
+
+	for (n = 0; n < 2000; n++) {
+		st = pvr_cr_read32(pvr_dev, ROGUE_CR_EVENT_STATUS);
+		if (st & 0xc00)
+			break;
+		udelay(1);
+	}
+	printf("PVRPOWREQ %s mask=0x%08x EVENT_STATUS=0x%08x %s polls=%u fw_booted=%d\n",
+	       (val == 1) ? "OFF" : "ON", mask, st,
+	       (st & 0x400) ? "COMPLETE" : (st & 0x800) ? "ABORT" : "NO-RESPONSE",
+	       n, pvr_dev->fw_dev.booted);
+	return (0);
+}
+
+SYSCTL_PROC(_hw, OID_AUTO, pvr_powreq,
+    CTLTYPE_INT | CTLFLAG_WR | CTLFLAG_MPSAFE, NULL, 0,
+    pvr_fbsd_powreq_sysctl, "I",
+    "1 = issue power-OFF request, 2 = power-ON, with the firmware running");
+#endif

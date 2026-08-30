@@ -470,6 +470,98 @@ pvr_device_gpu_init(struct pvr_device *pvr_dev)
 		}
 	}
 
+#ifdef __FreeBSD__
+	/*
+	 * Replay the firmware's power-request sequence from the host, with the
+	 * firmware not yet running.
+	 *
+	 * Disassembling our firmware (microMIPS, text at 0xc0000000) shows the
+	 * power controller handshake at 0xc000a454:
+	 *
+	 *     sw   1,      0x890(CR)   ; XPU_BROADCAST = core 0
+	 *     sw   mask,   0x038(CR)   ; unit mask, bit0 = on/off
+	 *     sw   mask|2, 0x038(CR)   ; bit1 = request
+	 *     poll 0x130(CR) for 0x400 (COMPLETE) / 0x800 (ABORT), 2000 times
+	 *
+	 * 0x038 is not defined in pvr_rogue_cr_defs.h - the host driver never
+	 * touches it. The firmware gets ABORT for every request it makes here
+	 * while the reference platform completes every one. Doing the identical
+	 * sequence from the host separates the two possibilities: if the
+	 * hardware aborts for us too, it is an integration property and not
+	 * something our firmware build is doing wrong.
+	 *
+	 * hw.pvr.powtest=1 to run. Uses the exact masks seen in the traces.
+	 */
+	{
+		char *ev = kern_getenv("hw.pvr.powtest");
+		int run = 0;
+
+		if (ev != NULL) {
+			run = (int)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+
+		if (run) {
+			/*
+			 * Sanity: can the host read these registers at all?
+			 * If known-nonzero IDs come back as 0, every
+			 * register-based conclusion here is worthless.
+			 */
+			static const struct { const char *name; u32 off; }
+			probe[] = {
+				{ "CORE_ID(0x18)",       0x0018 },
+				{ "CORE_REVISION(0x20)", 0x0020 },
+				{ "CLK_STATUS(0x08)",    0x0008 },
+				{ "DESIGNER_REV2(0x30)", 0x0030 },
+				{ "CHANGESET(0x40)",     0x0040 },
+				{ "EVENT_STATUS(0x130)", 0x0130 },
+				{ "XPU_BCAST(0x890)",    0x0890 },
+				{ "PWRREQ?(0x38)",       0x0038 },
+			};
+			u32 pi;
+
+			for (pi = 0; pi < ARRAY_SIZE(probe); pi++)
+				dev_info(from_pvr_device(pvr_dev)->dev,
+					 "REGSAN %-22s = 0x%08x\n",
+					 probe[pi].name,
+					 pvr_cr_read32(pvr_dev, probe[pi].off));
+		}
+
+		if (run) {
+			static const struct { const char *what; u32 mask; }
+			reqs[] = {
+				{ "OFF", 0x00000701u },
+				{ "ON",  0x01000703u },
+			};
+			u32 i, n, st;
+
+			for (i = 0; i < ARRAY_SIZE(reqs); i++) {
+				/* clear any stale COMPLETE/ABORT */
+				pvr_cr_write32(pvr_dev, 0x0138, 0xc00);
+				pvr_cr_write32(pvr_dev, ROGUE_CR_XPU_BROADCAST, 1);
+				(void)pvr_cr_read32(pvr_dev, ROGUE_CR_XPU_BROADCAST);
+				pvr_cr_write32(pvr_dev, 0x0038, reqs[i].mask);
+				pvr_cr_write32(pvr_dev, 0x0038, reqs[i].mask | 2);
+
+				st = 0;
+				for (n = 0; n < 2000; n++) {
+					st = pvr_cr_read32(pvr_dev, ROGUE_CR_EVENT_STATUS);
+					if (st & 0xc00)
+						break;
+					udelay(1);
+				}
+				dev_info(from_pvr_device(pvr_dev)->dev,
+					 "POWTEST %s mask=0x%08x -> EVENT_STATUS=0x%08x %s after %u polls (0x038 reads 0x%08x)\n",
+					 reqs[i].what, reqs[i].mask, st,
+					 (st & 0x400) ? "COMPLETE" :
+					 (st & 0x800) ? "ABORT" : "TIMEOUT",
+					 n, pvr_cr_read32(pvr_dev, 0x0038));
+				pvr_cr_write32(pvr_dev, 0x0138, 0xc00);
+			}
+		}
+	}
+#endif
+
 	dev_info(from_pvr_device(pvr_dev)->dev, "pvr_device_gpu_init: calling pvr_fw_init\n");
 	err = pvr_fw_init(pvr_dev);
 	if (err)
