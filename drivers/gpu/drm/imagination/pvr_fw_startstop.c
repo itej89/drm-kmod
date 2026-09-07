@@ -206,11 +206,16 @@ pvr_fw_start(struct pvr_device *pvr_dev)
 	 *
 	 * We never write this register - upstream does not, and neither did we,
 	 * so it keeps whatever the reset default is. The DDK's start sequence
-	 * does program it. This matters because the firmware's power controller
-	 * cannot gate a unit whose clock the host has forced ON: EXP-129 shows
-	 * every single power-off request refused (Aborted 269/269, unit mask
-	 * 0x01000702) where Debian's byte-identical request on the same silicon
-	 * completes 37/37.
+	 * does program it.
+	 *
+	 * CORRECTED 2026-09-10: the theory formerly stated here -- that the
+	 * power controller cannot gate a unit whose clock the host forced ON
+	 * -- is WRONG. The 0x0 read here is only the value *before* the
+	 * firmware programs the register. Reading CR_CLK_CTRL at job submit
+	 * (hw.pvr.clk_ctrl_runtime) gives 0x002aaa002a22aaaa: every unit
+	 * already in AUTO. Nothing is forced on, so that is not why power-off
+	 * requests abort. Host writes are dropped at both points; the
+	 * firmware owns this register, and already sets the wanted value.
 	 *
 	 * Log the live value unconditionally; hw.pvr.clk_ctrl_auto=1 programs
 	 * every unit to AUTO (0xAAAAAA002A2AAAAA, within MASKFULL

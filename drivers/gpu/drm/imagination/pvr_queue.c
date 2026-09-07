@@ -830,6 +830,33 @@ static struct dma_fence *pvr_queue_run_job(struct drm_sched_job *sched_job)
 			}
 		}
 		{
+			static int clk_rt = -1;
+			static int clk_logged;
+
+			if (clk_rt < 0) {
+				char *cv = kern_getenv("hw.pvr.clk_ctrl_runtime");
+
+				clk_rt = 0;
+				if (cv != NULL) {
+					clk_rt = (strtol(cv, NULL, 0) != 0);
+					freeenv(cv);
+				}
+			}
+			if (clk_rt) {
+				u64 before = pvr_cr_read64(pvr_dev, 0x0000);
+
+				pvr_cr_write64(pvr_dev, 0x0000,
+				    0xAAAAAA002A2AAAAAULL);
+				if (clk_logged < 4) {
+					clk_logged++;
+					drm_info(from_pvr_device(pvr_dev),
+					    "PVRCLKRT before=0x%016llx after=0x%016llx\n",
+					    (unsigned long long)before,
+					    (unsigned long long)pvr_cr_read64(pvr_dev, 0x0000));
+				}
+			}
+		}
+		{
 			static int force_eb = -1;
 
 			if (force_eb < 0) {
