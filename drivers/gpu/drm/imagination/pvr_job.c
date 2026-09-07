@@ -603,8 +603,31 @@ create_job(struct pvr_device *pvr_dev,
 	}
 
 	if (args->hwrt.set_handle) {
-		job->hwrt = pvr_hwrt_data_lookup(pvr_file, args->hwrt.set_handle,
-						 args->hwrt.data_index);
+		{
+			u32 idx = args->hwrt.data_index;
+#ifdef __FreeBSD__
+			/*
+			 * hw.pvr.pin_rtdata_use forces every job onto one HWRT
+			 * data slot. Renders alternate good/bad by index
+			 * parity; pinning the slot that is *used* (as opposed
+			 * to hw.pvr.pin_rtdata, which only pins what each slot
+			 * is initialised from) says whether the alternation
+			 * follows the slot at all.
+			 */
+			char *ev = kern_getenv("hw.pvr.pin_rtdata_use");
+
+			if (ev != NULL) {
+				long v = strtol(ev, NULL, 0);
+
+				if (v >= 0)
+					idx = (u32)v;
+				freeenv(ev);
+			}
+#endif
+			job->hwrt = pvr_hwrt_data_lookup(pvr_file,
+							 args->hwrt.set_handle,
+							 idx);
+		}
 		if (!job->hwrt) {
 			err = -EINVAL;
 			goto err_put_job;
