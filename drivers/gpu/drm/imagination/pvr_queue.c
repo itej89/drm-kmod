@@ -811,6 +811,75 @@ static struct dma_fence *pvr_queue_run_job(struct drm_sched_job *sched_job)
 	struct pvr_device *pvr_dev = job->pvr_dev;
 	int err;
 
+#ifdef __FreeBSD__
+	/*
+	 * Read the shader base registers *before* the kick. The reset handler
+	 * reads them after the fault, where a zero proves nothing.
+	 * hw.pvr.dump_execbase=<n> logs the first n submits.
+	 */
+	{
+		static int execbase_budget = -1;
+
+		if (execbase_budget < 0) {
+			char *ev = kern_getenv("hw.pvr.dump_execbase");
+
+			execbase_budget = 0;
+			if (ev != NULL) {
+				execbase_budget = (int)strtol(ev, NULL, 0);
+				freeenv(ev);
+			}
+		}
+		{
+			static int force_eb = -1;
+
+			if (force_eb < 0) {
+				char *fv = kern_getenv("hw.pvr.force_execbase");
+
+				force_eb = 0;
+				if (fv != NULL) {
+					force_eb = (strtol(fv, NULL, 0) != 0);
+					freeenv(fv);
+				}
+			}
+			if (force_eb) {
+				u32 lo = pvr_cr_read32(pvr_dev, 0x00610);
+				u32 hi = pvr_cr_read32(pvr_dev, 0x00614);
+
+				if (((u64)hi << 32 | lo) != ROGUE_PDSCODEDATA_HEAP_BASE) {
+					pvr_cr_write32(pvr_dev, 0x00610,
+					    (u32)ROGUE_PDSCODEDATA_HEAP_BASE);
+					pvr_cr_write32(pvr_dev, 0x00614,
+					    (u32)(ROGUE_PDSCODEDATA_HEAP_BASE >> 32));
+					pvr_cr_write32(pvr_dev, 0x04008,
+					    (u32)ROGUE_USCCODE_HEAP_BASE);
+					pvr_cr_write32(pvr_dev, 0x0400c,
+					    (u32)(ROGUE_USCCODE_HEAP_BASE >> 32));
+					/* PVRFORCEEB: did the write stick? */
+					if (execbase_budget > 0)
+						drm_info(from_pvr_device(pvr_dev),
+						    "PVRFORCEEB wrote base, reads back 0x%llx\n",
+						    (unsigned long long)(((u64)pvr_cr_read32(pvr_dev, 0x00614) << 32) |
+									 pvr_cr_read32(pvr_dev, 0x00610)));
+				}
+			}
+		}
+		if (execbase_budget > 0) {
+			u32 pds_lo = pvr_cr_read32(pvr_dev, 0x00610);
+			u32 pds_hi = pvr_cr_read32(pvr_dev, 0x00614);
+			u32 usc_lo = pvr_cr_read32(pvr_dev, 0x04008);
+			u32 usc_hi = pvr_cr_read32(pvr_dev, 0x0400c);
+
+			execbase_budget--;
+			drm_info(from_pvr_device(pvr_dev),
+			    "PVREXECBASE submit type=%u paired=%d "
+			    "PDS_EXEC_BASE=0x%llx USC_CODE_BASE=0x%llx\n",
+			    job->type, job->paired_job ? 1 : 0,
+			    (unsigned long long)((u64)pds_hi << 32 | pds_lo),
+			    (unsigned long long)((u64)usc_hi << 32 | usc_lo));
+		}
+	}
+#endif
+
 	/* The fragment job is issued along the geometry job when we use combined
 	 * geom+frag kicks. When we get there, we should simply return the
 	 * done_fence that's been initialized earlier.
