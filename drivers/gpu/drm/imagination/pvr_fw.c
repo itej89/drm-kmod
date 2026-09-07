@@ -25,10 +25,39 @@
 
 #define FW_MAX_SUPPORTED_MAJOR_VERSION 1
 
+/* Info header version used by the proprietary DDK firmware build. */
+#define PVR_FW_INFO_VERSION_DDK 2
+
+/*
+ * Off by default: loading the image is necessary but not sufficient, since the
+ * runtime rogue_fwif_* interface differs between the open and DDK builds.
+ */
+
 #define FW_BOOT_TIMEOUT_USEC 5000000
 
 #ifdef __FreeBSD__
 #include <sys/sysctl.h>
+static bool
+pvr_allow_proprietary_fw(void)
+{
+#ifdef __FreeBSD__
+	static int cached = -1;
+	char *ev;
+
+	if (cached < 0) {
+		cached = 0;
+		ev = kern_getenv("hw.pvr.allow_proprietary_fw");
+		if (ev != NULL) {
+			cached = (strtol(ev, NULL, 0) != 0);
+			freeenv(ev);
+		}
+	}
+	return (cached != 0);
+#else
+	return (false);
+#endif
+}
+
 static int pvr_pow_rascaldust_enable = 0;
 SYSCTL_INT(_hw, OID_AUTO, pvr_pow_rascaldust, CTLFLAG_RDTUN,
     &pvr_pow_rascaldust_enable, 0,
@@ -104,6 +133,7 @@ pvr_fw_validate(struct pvr_device *pvr_dev)
 	const struct pvr_fw_info_header *header;
 	const u8 *fw = firmware->data;
 	u32 fw_offset = firmware->size - SZ_4K;
+	u32 expected_header_len;
 	u32 layout_table_size;
 	u32 entry;
 
@@ -112,21 +142,38 @@ pvr_fw_validate(struct pvr_device *pvr_dev)
 
 	header = (const struct pvr_fw_info_header *)&fw[fw_offset];
 
-	if (header->info_version != PVR_FW_INFO_VERSION) {
+	/*
+	 * The proprietary DDK build carries a version 2 header: the same
+	 * structure 8 bytes shorter, without device_info_size or padding.
+	 * Everything needed to locate the layout table is present, and
+	 * layout_entry_size already matches.
+	 */
+	if (header->info_version == PVR_FW_INFO_VERSION_DDK)
+		expected_header_len =
+			offsetof(struct pvr_fw_info_header, device_info_size);
+	else if (header->info_version == PVR_FW_INFO_VERSION)
+		expected_header_len = sizeof(struct pvr_fw_info_header);
+	else {
 		drm_err(drm_dev, "Unsupported fw info version %u\n",
 			header->info_version);
 		return -EINVAL;
 	}
 
-	if (header->header_len != sizeof(struct pvr_fw_info_header) ||
+	if (header->header_len != expected_header_len ||
 	    header->layout_entry_size != sizeof(struct pvr_fw_layout_entry) ||
 	    header->layout_entry_num > PVR_FW_INFO_MAX_NUM_ENTRIES) {
 		drm_err(drm_dev, "FW info format mismatch\n");
 		return -EINVAL;
 	}
 
-	if (!(header->flags & PVR_FW_FLAGS_OPEN_SOURCE) ||
-	    header->fw_version_major > FW_MAX_SUPPORTED_MAJOR_VERSION ||
+	if (!(header->flags & PVR_FW_FLAGS_OPEN_SOURCE) &&
+	    !pvr_allow_proprietary_fw()) {
+		drm_err(drm_dev,
+			"Firmware is not an open-source build; set hw.pvr.allow_proprietary_fw=1 to use it\n");
+		return -EINVAL;
+	}
+
+	if (header->fw_version_major > FW_MAX_SUPPORTED_MAJOR_VERSION ||
 	    header->fw_version_major == 0) {
 		drm_err(drm_dev, "Unsupported FW version %u.%u (build: %u%s)\n",
 			header->fw_version_major, header->fw_version_minor,
@@ -160,8 +207,6 @@ pvr_fw_validate(struct pvr_device *pvr_dev)
 			return -EINVAL;
 	}
 
-	fw_offset = (firmware->size - SZ_4K) - header->device_info_size;
-
 	drm_info(drm_dev, "FW version v%u.%u (build %u OS)\n", header->fw_version_major,
 		 header->fw_version_minor, header->fw_version_build);
 
@@ -170,9 +215,34 @@ pvr_fw_validate(struct pvr_device *pvr_dev)
 
 	pvr_dev->fw_dev.header = header;
 	pvr_dev->fw_dev.layout_entries = layout_entries;
+	pvr_dev->fw_dev.ddk_device_info_size =
+		(header->info_version == PVR_FW_INFO_VERSION_DDK)
+			? 0u : header->device_info_size;
 
 	return 0;
 }
+
+/*
+ * The DDK image ships no device-information section.  This block is the one
+ * from the open firmware for the same BVNC (36.50.54.182); it describes the
+ * GPU, not the firmware build, so it is correct for either image.  Leading
+ * four values are the brn/ern/feature/feature-param mask sizes, in u64s.
+ */
+#define PVR_FW_DDK_BVNC_36_50_54_182 0x00240032003600b6ULL
+static const u64 pvr_fw_ddk_device_info[] = {
+	1ULL, 1ULL, 2ULL, 29ULL,
+	0x0000000000000a00ULL, 0x00000000000000f5ULL, 0x92d9ff57fdbf7cdbULL,
+	0x000000000000001fULL, 0x0000000000000001ULL, 0x0000000000004000ULL,
+	0x0000000000000032ULL, 0x0000000000000032ULL, 0x0000000000000007ULL,
+	0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000004ULL,
+	0x0000000000000001ULL, 0x0000000000000001ULL, 0x000000000000000aULL,
+	0x0000000000000000ULL, 0x0000000000000001ULL, 0x0000000000000004ULL,
+	0x0000000000000008ULL, 0x0000000000000001ULL, 0x0000000000000024ULL,
+	0x0000000000000002ULL, 0x0000000000000001ULL, 0x0000000000000200ULL,
+	0x0000000000000010ULL, 0x0000000000000010ULL, 0x0000000000000010ULL,
+	0x0000000000000002ULL, 0x0000000000000028ULL, 0x0000000000000001ULL,
+	0x0000000000000013ULL, 0x0000000000000003ULL, 0x0000000000000001ULL,
+};
 
 static int
 pvr_fw_get_device_info(struct pvr_device *pvr_dev)
@@ -183,10 +253,25 @@ pvr_fw_get_device_info(struct pvr_device *pvr_dev)
 	const u64 *dev_info;
 	u32 fw_offset;
 
-	fw_offset = (firmware->size - SZ_4K) - pvr_dev->fw_dev.header->device_info_size;
-
-	header = (struct pvr_fw_device_info_header *)&fw[fw_offset];
-	dev_info = (u64 *)(header + 1);
+	if (pvr_dev->fw_dev.header->info_version == PVR_FW_INFO_VERSION_DDK) {
+		/*
+		 * No device-info section in the image.  Reading one out of it
+		 * would take the info header's first word as a mask size.
+		 */
+		if (pvr_dev->fw_dev.header->bvnc !=
+		    PVR_FW_DDK_BVNC_36_50_54_182) {
+			drm_err(from_pvr_device(pvr_dev),
+				"No device info for this DDK firmware BVNC\n");
+			return -EINVAL;
+		}
+		header = (struct pvr_fw_device_info_header *)
+		    (uintptr_t)pvr_fw_ddk_device_info;
+	} else {
+		fw_offset = (firmware->size - SZ_4K) -
+		    pvr_dev->fw_dev.ddk_device_info_size;
+		header = (struct pvr_fw_device_info_header *)&fw[fw_offset];
+	}
+	dev_info = (const u64 *)(header + 1);
 
 	pvr_device_info_set_quirks(pvr_dev, dev_info, header->brn_mask_size);
 	dev_info += header->brn_mask_size;

@@ -309,6 +309,13 @@ struct pvr_fw_device {
 	/** @layout_entries: Pointer to firmware layout. */
 	const struct pvr_fw_layout_entry *layout_entries;
 
+	/**
+	 * @ddk_device_info_size: Device info size taken from the header, or 0
+	 * for a version 2 header, which has no such field. Read this rather
+	 * than header->device_info_size, which is only valid for version 3.
+	 */
+	u32 ddk_device_info_size;
+
 	/** @mem: Structure containing objects representing firmware memory allocations. */
 	struct pvr_fw_mem mem;
 

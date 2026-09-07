@@ -258,11 +258,32 @@ pvr_device_irq_fini(struct pvr_device *pvr_dev)
  *  * The constructed filename on success, or
  *  * Any error returned by kasprintf().
  */
+
 static char *
 pvr_build_firmware_filename(struct pvr_device *pvr_dev, const char *base,
 			    u8 major)
 {
 	struct pvr_gpu_id *gpu_id = &pvr_dev->gpu_id;
+
+	/*
+	 * The DDK image is not named to this convention -- it ships as
+	 * rgx.fw.<b>.<v>.<n>.<c> -- so allow the name to be given outright.
+	 * On FreeBSD request_firmware() resolves through firmware(9), which
+	 * also flattens '/', '.' and '-' to '_' when matching, so a firmware
+	 * module registering either spelling will be found.
+	 */
+#ifdef __FreeBSD__
+	{
+		char *ev = kern_getenv("hw.pvr.fw_filename");
+
+		if (ev != NULL) {
+			char *name = kstrdup(ev, GFP_KERNEL);
+
+			freeenv(ev);
+			return (name);
+		}
+	}
+#endif
 
 	return kasprintf(GFP_KERNEL, "%s_%d.%d.%d.%d_v%d.fw", base, gpu_id->b,
 			 gpu_id->v, gpu_id->n, gpu_id->c, major);
