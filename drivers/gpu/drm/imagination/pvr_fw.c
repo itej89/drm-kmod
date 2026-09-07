@@ -825,6 +825,17 @@ pvr_fw_create_structures(struct pvr_device *pvr_dev)
 			fw_dev->fwif_sysdata->config_flags |=
 			    ROGUE_FWIF_INICFG_REGCONFIG_EN;
 #ifdef __FreeBSD__
+			/*
+			 * The table itself has to reach DRAM too -- reg cfg
+			 * table flushed here. DEVICE_UNCACHED is not honoured
+			 * on JH7110 (no Svpbmt on the U74), which is why the
+			 * two flushes below exist; without this one the
+			 * firmware can read a stale table, never restore
+			 * CR_PDS_EXEC_BASE, and the first fragment kick of a
+			 * context faults at a raw heap offset.
+			 */
+			pvr_dma_cache_wbinv(reg_cfg_ptr,
+			    sizeof(struct rogue_fwif_reg_cfg));
 			pvr_dma_cache_wbinv(fw_dev->fwif_sysinit,
 			    sizeof(*fw_dev->fwif_sysinit));
 			pvr_dma_cache_wbinv(fw_dev->fwif_sysdata,
