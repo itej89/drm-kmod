@@ -553,7 +553,33 @@ fw_sysdata_init(void *cpu_ptr, void *priv)
 
 	config_flags |= ROGUE_FWIF_INICFG_POW_RASCALDUST;
 
+	/*
+	 * The context-switch profile field (bits 18:16) was left at 0, which is
+	 * not one of the defined profiles (FAST 1, MEDIUM 2, SLOW 3,
+	 * NODELAY 4). The DDK runs MEDIUM on this silicon -- its debug_dump
+	 * reports config flags 0x00020010, "Medium CSW profile; Power
+	 * Rascal/Dust". Default to the same; hw.pvr.ctxsw_profile overrides,
+	 * and 0 restores the old unset behaviour for A/B.
+	 */
+	{
+		u32 profile = ROGUE_FWIF_CTXSWITCH_PROFILE_MEDIUM_EN;
+#ifdef __FreeBSD__
+		char *ev = kern_getenv("hw.pvr.ctxsw_profile");
+
+		if (ev != NULL) {
+			profile = (u32)strtoul(ev, NULL, 0);
+			freeenv(ev);
+		}
+#endif
+		if (profile > 4)
+			profile = ROGUE_FWIF_CTXSWITCH_PROFILE_MEDIUM_EN;
+		config_flags &= ~ROGUE_FWIF_INICFG_CTXSWITCH_PROFILE_MASK;
+		config_flags |= profile << ROGUE_FWIF_INICFG_CTXSWITCH_PROFILE_SHIFT;
+	}
+
 	fwif_sysdata->config_flags = config_flags;
+	drm_info(from_pvr_device(pvr_dev),
+	    "FW config_flags = 0x%08x\n", config_flags);
 }
 
 static void
