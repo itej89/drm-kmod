@@ -283,6 +283,46 @@ hwrt_init_common_fw_structure(struct pvr_file *pvr_file,
 		info.tile_max_y = info.num_tiles_y - 1;
 	}
 
+	/*
+	 * hw.pvr.mtile_x / hw.pvr.mtile_y override the macrotile grid at its
+	 * source, so every derived value (mtile_stride, te_mtile1/2,
+	 * isp_mtile_size) stays coherent. Overriding only the ISP register
+	 * leaves the TE registers describing a different grid.
+	 *
+	 * A sweep of CR_ISP_MTILE_SIZE at 128x128 showed failures drop from
+	 * 8/16 to 2/16 whenever *either* dimension is 1, with the actual
+	 * magnitude irrelevant - so the 2-D macrotile grid, not its size, is
+	 * what this part mishandles. The upstream formula
+	 * (DIV_ROUND_UP(num_tiles, 8) * 2) can never produce 1.
+	 */
+	{
+		char *ev;
+
+		ev = kern_getenv("hw.pvr.mtile_x");
+		if (ev != NULL) {
+			u32 v = (u32)strtoul(ev, NULL, 0);
+
+			if (v > 0) {
+				info.mtile_x[0] = v;
+				info.mtile_x[1] = 0;
+				info.mtile_x[2] = 0;
+			}
+			freeenv(ev);
+		}
+
+		ev = kern_getenv("hw.pvr.mtile_y");
+		if (ev != NULL) {
+			u32 v = (u32)strtoul(ev, NULL, 0);
+
+			if (v > 0) {
+				info.mtile_y[0] = v;
+				info.mtile_y[1] = 0;
+				info.mtile_y[2] = 0;
+			}
+			freeenv(ev);
+		}
+	}
+
 	hwrt->common.geom_caches_need_zeroing = false;
 
 	hwrt->common.isp_merge_lower_x = args->isp_merge_lower_x;
@@ -596,8 +636,27 @@ pvr_hwrt_dataset_create(struct pvr_file *pvr_file,
 		goto err_fini_kernel_structure;
 
 	for (; i < ARRAY_SIZE(hwrt->data); i++) {
+		/* DIAGNOSTIC (hw.pvr.single_rtdata=1): renders alternate
+		 * perfect/broken in lockstep with the RT data index, which
+		 * points at one of the two being misconfigured. Pointing both
+		 * at rt_data_args[0] tests that directly - if the alternation
+		 * disappears, RT data 1 is the problem.
+		 */
+		int rt_i = i;
+		{
+			char *ev = kern_getenv("hw.pvr.pin_rtdata");
+			if (ev != NULL) {
+				long v = strtol(ev, NULL, 0);
+				if (v >= 0 && v < (long)ARRAY_SIZE(hwrt->data))
+					rt_i = (int)v;
+				freeenv(ev);
+			}
+		}
+		if (rt_i != (int)i)
+			pr_info("HWRT: slot %u initialised from rt_data_args[%d]\n",
+				i, rt_i);
 		err = hwrt_data_init_fw_structure(pvr_file, hwrt, args,
-						  &args->rt_data_args[i],
+						  &args->rt_data_args[rt_i],
 						  &hwrt->data[i]);
 		if (err < 0)
 			goto err_fini_data_structures;

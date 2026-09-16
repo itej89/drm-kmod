@@ -521,18 +521,36 @@ pvr_fw_trace_dump(struct pvr_device *pvr_dev, u32 max_dwords)
 		wroff = space->trace_pointer;
 		printf("PVRFWTRACE thread%u wroff=%u:\n", thread_nr, wroff);
 
-		/* Walk backwards from the write pointer: most recent first. */
-		for (i = 0; i < max_dwords; i++) {
-			u32 idx = (wroff + ROGUE_FW_TRACE_BUF_DEFAULT_SIZE_IN_DWORDS
-				   - 1 - i) %
-				  ROGUE_FW_TRACE_BUF_DEFAULT_SIZE_IN_DWORDS;
+		/*
+		 * Print the window ending at the write pointer in FORWARD
+		 * order, including zero dwords. Skipping zeros desynchronises
+		 * any host-side decoder: entries are [id][ts_lo][ts_hi][params]
+		 * and a dropped zero makes the next entry's id look like a
+		 * parameter, so timestamps and parameters come out wrong.
+		 */
+		{
+			u32 span = min(max_dwords,
+				       (u32)ROGUE_FW_TRACE_BUF_DEFAULT_SIZE_IN_DWORDS);
+			u32 start = (wroff + ROGUE_FW_TRACE_BUF_DEFAULT_SIZE_IN_DWORDS
+				     - span) %
+				    ROGUE_FW_TRACE_BUF_DEFAULT_SIZE_IN_DWORDS;
 
-			if (buf[idx] == 0)
-				continue;
+			for (i = 0; i < span; i += 8) {
+				u32 j, idx0 = (start + i) %
+					ROGUE_FW_TRACE_BUF_DEFAULT_SIZE_IN_DWORDS;
+				char line[128];
+				int n = snprintf(line, sizeof(line), "  %5u:", idx0);
 
-			printf("  [%5u]=0x%08x\n", idx, buf[idx]);
-			if (++printed >= max_dwords)
-				break;
+				for (j = 0; j < 8 && (i + j) < span; j++) {
+					u32 idx = (start + i + j) %
+						ROGUE_FW_TRACE_BUF_DEFAULT_SIZE_IN_DWORDS;
+
+					n += snprintf(line + n, sizeof(line) - n,
+						      " %08x", buf[idx]);
+				}
+				printf("%s\n", line);
+			}
+			printed = span;
 		}
 	}
 }

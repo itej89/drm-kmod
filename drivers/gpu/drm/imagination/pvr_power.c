@@ -705,6 +705,61 @@ pvr_fbsd_powreq_sysctl(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
+/*
+ * ROGUE_CR_CLK_CTRL probe.
+ *
+ * Programming this at FW-start time silently fails: we write
+ * 0xAAAAAA002A2AAAAA and read back 0. So the "clocks forced ON block the
+ * firmware's power-off" hypothesis has never actually been tested - the
+ * independent variable never changed.
+ *
+ * This writes the register at runtime, with the firmware up, and reports the
+ * readback so we can find a point where it sticks.
+ *
+ *   sysctl hw.pvr_clkctrl=0   read only
+ *   sysctl hw.pvr_clkctrl=1   program all units to AUTO
+ *   sysctl hw.pvr_clkctrl=2   program all units to ON
+ */
+static int
+pvr_fbsd_clkctrl_sysctl(SYSCTL_HANDLER_ARGS)
+{
+	struct pvr_device *pvr_dev = pvr_fbsd_dev;
+	u64 before, want, after;
+	int val = 0, error;
+
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error != 0 || req->newptr == NULL)
+		return (error);
+	if (pvr_dev == NULL)
+		return (ENXIO);
+
+	before = pvr_cr_read64(pvr_dev, ROGUE_CR_CLK_CTRL);
+	if (val == 0) {
+		printf("PVRCLK read-only: CLK_CTRL=0x%016llx maskfull=0x%016llx\n",
+		       (unsigned long long)before,
+		       (unsigned long long)ROGUE_CR_CLK_CTRL_MASKFULL);
+		return (0);
+	}
+
+	want = (val == 1) ? 0xAAAAAA002A2AAAAAULL : 0x5555550015155555ULL;
+	want &= ROGUE_CR_CLK_CTRL_MASKFULL;
+	pvr_cr_write64(pvr_dev, ROGUE_CR_CLK_CTRL, want);
+	(void)pvr_cr_read64(pvr_dev, ROGUE_CR_CLK_CTRL);
+	after = pvr_cr_read64(pvr_dev, ROGUE_CR_CLK_CTRL);
+
+	printf("PVRCLK write %s: before=0x%016llx wrote=0x%016llx after=0x%016llx %s\n",
+	       (val == 1) ? "AUTO" : "ON",
+	       (unsigned long long)before, (unsigned long long)want,
+	       (unsigned long long)after,
+	       (after == want) ? "STUCK" : "IGNORED");
+	return (0);
+}
+
+SYSCTL_PROC(_hw, OID_AUTO, pvr_clkctrl,
+    CTLTYPE_INT | CTLFLAG_WR | CTLFLAG_MPSAFE, NULL, 0,
+    pvr_fbsd_clkctrl_sysctl, "I",
+    "0 = read CLK_CTRL, 1 = force all-AUTO, 2 = force all-ON");
+
 SYSCTL_PROC(_hw, OID_AUTO, pvr_powreq,
     CTLTYPE_INT | CTLFLAG_WR | CTLFLAG_MPSAFE, NULL, 0,
     pvr_fbsd_powreq_sysctl, "I",
