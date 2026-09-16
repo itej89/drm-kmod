@@ -149,7 +149,7 @@ struct drm_device {
 	bool unplugged;
 
 	/** @anon_inode: inode for private address-space */
-#ifdef __linux__	
+#ifndef __FreeBSD__	/* PVRPORT: not __linux__ -- see drm_file.h */
 	struct inode *anon_inode;
 #endif
 

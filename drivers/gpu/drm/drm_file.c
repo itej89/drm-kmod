@@ -340,6 +340,10 @@ int drm_open_helper(struct file *filp, struct drm_minor *minor)
 		}
 	}
 
+	printf("PVRPORT layout(drm-kmod): filp=%zu driver_priv=%zu size=%zu\n",
+	       offsetof(struct drm_file, filp),
+	       offsetof(struct drm_file, driver_priv),
+	       sizeof(struct drm_file));
 	filp->private_data = priv;
 	priv->filp = filp;
 

@@ -379,6 +379,14 @@ int drm_prime_fd_to_handle_ioctl(struct drm_device *dev, void *data,
 {
 	struct drm_prime_handle *args = data;
 
+	/* The GEM fallback below needs dev->object_name_lock, which only
+	 * DRIVER_GEM drivers get initialised. Without this check a driver with
+	 * no GEM and no prime callback of its own -- the PowerVR DDK driver --
+	 * panics the kernel on an ioctl any process can make. */
+	if (!dev->driver->prime_fd_to_handle &&
+	    !drm_core_check_feature(dev, DRIVER_GEM))
+		return -EOPNOTSUPP;
+
 	if (dev->driver->prime_fd_to_handle) {
 		return dev->driver->prime_fd_to_handle(dev, file_priv, args->fd,
 						       &args->handle);
@@ -572,6 +580,11 @@ int drm_prime_handle_to_fd_ioctl(struct drm_device *dev, void *data,
 #endif
 	if (args->flags & ~(DRM_CLOEXEC | DRM_RDWR))
 		return -EINVAL;
+
+	/* Same as drm_prime_fd_to_handle_ioctl(): no GEM, no fallback. */
+	if (!dev->driver->prime_handle_to_fd &&
+	    !drm_core_check_feature(dev, DRIVER_GEM))
+		return -EOPNOTSUPP;
 
 	if (dev->driver->prime_handle_to_fd) {
 		return dev->driver->prime_handle_to_fd(dev, file_priv,

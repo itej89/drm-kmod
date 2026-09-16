@@ -279,7 +279,9 @@ struct drm_file {
 	 * Updates are guarded with dev->filelist_mutex and reference must be
 	 * dropped after a RCU grace period to accommodate lockless readers.
 	 */
-#ifdef __linux__
+#ifndef __FreeBSD__	/* PVRPORT: not __linux__ -- the DDK module builds with
+			 * -D__linux__ and would otherwise see a struct 8 bytes
+			 * smaller than the one drm-kmod itself was built with. */
 	struct pid __rcu *pid;
 #elif defined(__FreeBSD__)
 	/* Caution: `pid` is an integer on FreeBSD, not a pointer. */
