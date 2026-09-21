@@ -340,10 +340,24 @@ int drm_open_helper(struct file *filp, struct drm_minor *minor)
 		}
 	}
 
-	printf("PVRPORT layout(drm-kmod): filp=%zu driver_priv=%zu size=%zu\n",
-	       offsetof(struct drm_file, filp),
-	       offsetof(struct drm_file, driver_priv),
-	       sizeof(struct drm_file));
+	/*
+	 * Once. These offsets are a property of the build -- they are how the
+	 * -D__linux__ struct-layout skew was caught -- and this is the open
+	 * path, which a compositor and its clients hit repeatedly. Every line
+	 * costs ~11 ms on this board's 115200-baud serial console.
+	 */
+	{
+		static bool pvrport_layout_logged;
+
+		if (!pvrport_layout_logged) {
+			pvrport_layout_logged = true;
+			printf("PVRPORT layout(drm-kmod): filp=%zu "
+			    "driver_priv=%zu size=%zu\n",
+			    offsetof(struct drm_file, filp),
+			    offsetof(struct drm_file, driver_priv),
+			    sizeof(struct drm_file));
+		}
+	}
 	filp->private_data = priv;
 	priv->filp = filp;
 

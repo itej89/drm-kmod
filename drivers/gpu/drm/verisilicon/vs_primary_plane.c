@@ -48,9 +48,18 @@ static int vs_primary_plane_atomic_check(struct drm_plane *plane,
 		return 0;
 
 	if (fb) {
-		printf("vs_plane_check: fb format=0x%x modifier=0x%llx w=%u h=%u\n",
-		       fb->format->format, (unsigned long long)fb->modifier,
-		       fb->width, fb->height);
+		/*
+		 * Runs once per atomic check, i.e. once per frame. printf()
+		 * goes to the console, and this board's console is a
+		 * 115200-baud serial line drained synchronously -- roughly
+		 * 11 ms a line, on the frame path. Keep it behind the DRM
+		 * debug mask (hw.dri.debug) like every other per-frame
+		 * message.
+		 */
+		DRM_DEBUG_KMS("fb format=0x%x modifier=0x%llx w=%u h=%u\n",
+			      fb->format->format,
+			      (unsigned long long)fb->modifier,
+			      fb->width, fb->height);
 	}
 
 	ret = drm_format_to_vs_format(fb->format->format,
